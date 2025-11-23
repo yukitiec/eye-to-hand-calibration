@@ -5,9 +5,6 @@
 
 #pragma once
 #pragma comment(lib, "rtde.lib")
-
-#include "targetver.h"
-
 //utility
 #include <iostream>
 #include <string>
@@ -50,14 +47,11 @@
 #include "opencv2/core/ocl.hpp"
 #include <opencv2/tracking/tracking_legacy.hpp>
 
-#include "ximea.h"
+//For RealSense.
+#include <sstream>
+#include <iomanip>
 
-//existed header files
-#include "type_definition.h"
-#include "communicate_dspace.h"
-#include "display_info.h"
-#include <iso646.h> 
-#include "progressbar.hpp"
+#include <librealsense2/rs.hpp> // RealSense SDK
 
 //UR
 #include <ur_rtde/rtde_control_interface.h>

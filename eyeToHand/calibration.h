@@ -2,7 +2,6 @@
 
 #include "stdafx.h"
 #include "ui_getData.h"
-#include "triangulation.h"
 #include "chess2camera.h"
 
 /* frame queue */
@@ -17,6 +16,7 @@ class Calibration {
 	* @brief eye to hand calibration class.
 	*/
 private:
+	const double PI=3.14159265358979323846;
 	//constructor
 	UI_getData ui;//get robot tcp pose and images.
 	const cv::Mat H_tcp2chess = (cv::Mat_<double>(4, 4) <<
@@ -31,20 +31,8 @@ private:
 
 
 public:
-	std::string rootDir;
-	std::string file_intrinsic_left;
-	std::string file_intrinsic_right;
-	std::string file_extrinsic_left;
-	std::string file_extrinsic_right;
-	Triangulation tri;
 
-	Calibration(const std::string& rootDir)
-		:rootDir(rootDir),
-		file_intrinsic_left(rootDir + "/camera0_intrinsics.dat"),
-		file_intrinsic_right(rootDir + "/camera1_intrinsics.dat"),
-		file_extrinsic_left(rootDir + "/camera0_rot_trans.dat"),
-		file_extrinsic_right(rootDir + "/camera1_rot_trans.dat"),
-		tri(file_intrinsic_left, file_intrinsic_right, file_extrinsic_left, file_extrinsic_right)
+	Calibration()
 	{
 		std::cout << "construct a Eye to Hand calibration class" << std::endl;
 	};

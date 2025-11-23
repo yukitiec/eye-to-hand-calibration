@@ -2,6 +2,8 @@
 
 #include "stdafx.h"
 #include "utility.h"
+#include "realsense.h"
+#include "chess2camera.h"
 
 extern std::queue<std::array<cv::Mat1b, 2>> queueFrame;
 extern std::queue<int> queueFrameIndex;
@@ -16,12 +18,15 @@ private:
 	const std::string sign_quit = "q";//continue sign.
 	const double move_max = 0.6;//max joints move.
 	Utility ut;
+	RealSense _rs_instance;//
+	Chess2camera _corner_detector;
 
 public:
 	std::filesystem::path path_root, path_img, path_img_left, path_img_right, path_undistort_left, path_undistort_right, path_csv;
 	std::string rootDir, imgDir_left, imgDir_right, undistortDir_left, undistortDir_right, csvDir;
 
 	UI_getData() {
+		_corner_detector.main();//set the chessboard setting.
 		std::cout << "construct UI for getting images and robot tcp position data" << std::endl;
 	};
 
@@ -31,7 +36,7 @@ public:
 	* @brief move robot for chessboard is within camera field of view, and save images and robot TCP pose.
 	* @param[in] imgDir, csvDir image and csv directory.
 	*/
-	void main();
+	void main(std::vector<cv::Mat>& Hs_chess2camera, std::vector<cv::Mat>& Hs_tcp2base);
 
 	/**
 	* @brief move robot according to human inputs.
@@ -43,5 +48,7 @@ public:
 	* @brief make a directory.
 	*/
 	void makeDir(std::filesystem::path& dirPath);
+
+	cv::Mat createHomogeneousMatrix(std::vector<double>& pose);
 
 };
