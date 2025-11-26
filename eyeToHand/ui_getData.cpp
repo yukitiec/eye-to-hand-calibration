@@ -72,85 +72,50 @@ void UI_getData::main(std::vector<cv::Mat>& Hs_chess2camera, std::vector<cv::Mat
             const int expected_num_corners = _corner_detector.width * _corner_detector.height;
 
             if (static_cast<int>(corners.size()) >= expected_num_corners) {
-                //-------- Get 3 points to compute the board's 3D pose.
-
-                // Ensure the indices 0, 1, and width are valid
-                if (_corner_detector.width >= 2 && _corner_detector.width < expected_num_corners) {
-                    std::cout << "1" << std::endl;
-
-                    cv::Point2f p_origin = corners[0];
-                    cv::Point2f p_x = corners[1];
-                    cv::Point2f p_y = corners[_corner_detector.width];
-
-                    std::vector<cv::Point2f> ps_2d{ p_origin, p_x, p_y };
-                    std::vector<cv::Point3f> ps_3d;
-
-                    //------- Compute 3D position of each corner
-                    bool bool_valid = true;
-                    for (const auto& p : ps_2d) {
-                        bool valid = (p.x >= 0 && p.x < _color_intrinsics.width && p.y >= 0 && p.y < _color_intrinsics.height);
-                        float depth_meters = 0.0f;
-                        if (p.x >= 0 && p.y >= 0 && valid) {
-                            try {
-                                depth_meters = aligned_depth_frame->get_distance(static_cast<int>(p.x), static_cast<int>(p.y));
-                                float pixel[2] = { p.x, p.y };
-                                float point_3d[3];
-                                rs2_deproject_pixel_to_point(point_3d, &_color_intrinsics, pixel, depth_meters);
-                                ps_3d.emplace_back(point_3d[0], point_3d[1], point_3d[2]);
-                            }
-                            catch (const rs2::error& e) {
-                                // Print the prompt error only on first exception for demo
-                                static bool error_printed = false;
-                                if (!error_printed) {
-                                    std::cerr << "RealSense error: " << e.what() << std::endl;
-                                    error_printed = true;
-                                }
-                                depth_meters = 0.0f;
-                                bool_valid = false;
-                            }
-                        }
-                        else {
-                            bool_valid = false;
-                        }
+                // Prepare 3D object points for the chessboard in its coordinate system (z=0 plane)
+                std::vector<cv::Point3f> objectPoints;
+                for (int i = 0; i < _corner_detector.height; ++i) {
+                    for (int j = 0; j < _corner_detector.width; ++j) {
+                        objectPoints.emplace_back(j * _corner_detector.square_size, i * _corner_detector.square_size, 0.0f); // square_size is known or provided
                     }
-                    std::cout << "2" << std::endl;
+                }
 
-                    if (bool_valid && ps_3d.size() == 3) {
-                        //---------- Calculate the board's pose axes
-                        cv::Point3f Porigin = ps_3d[0];
-                        cv::Point3f Px = ps_3d[1];
-                        cv::Point3f Py = ps_3d[2];
+                // Camera parameters
+                cv::Mat cameraMatrix, distCoeffs;
+                // Assume _color_intrinsics is filled as in pyrealsense2/opencv conversion
+                cameraMatrix = cv::Mat::eye(3, 3, CV_64F);
+                cameraMatrix.at<double>(0, 0) = _color_intrinsics.fx;  // Focal length in x (pixels)
+                cameraMatrix.at<double>(1, 1) = _color_intrinsics.fy;  // Focal length in y (pixels)
+                cameraMatrix.at<double>(0, 2) = _color_intrinsics.ppx; // Principal point x-coordinate (pixels)
+                cameraMatrix.at<double>(1, 2) = _color_intrinsics.ppy; // Principal point y-coordinate (pixels)
+                distCoeffs = cv::Mat::zeros(1, 5, CV_64F);
 
-                        cv::Point3f ex = Px - Porigin;
-                        ex /= cv::norm(ex);
-                        cv::Point3f ey = Py - Porigin;
-                        ey /= cv::norm(ey);
-                        cv::Point3f ez = ex.cross(ey);
-                        ez /= cv::norm(ez);
+                cv::Mat rvec, tvec;
+                bool found = cv::solvePnP(objectPoints, corners, cameraMatrix, distCoeffs, rvec, tvec);
 
-                        //---------- Build rotation matrix as cv::Mat (3x3)
-                        cv::Mat R(3, 3, CV_32F);
-                        R.at<float>(0, 0) = ex.x; R.at<float>(0, 1) = ey.x; R.at<float>(0, 2) = ez.x;
-                        R.at<float>(1, 0) = ex.y; R.at<float>(1, 1) = ey.y; R.at<float>(1, 2) = ez.y;
-                        R.at<float>(2, 0) = ex.z; R.at<float>(2, 1) = ey.z; R.at<float>(2, 2) = ez.z;
-
-                        //---------- Compose 4x4 homogeneous transformation matrix
-                        cv::Mat T = cv::Mat::eye(4, 4, CV_32F);
-                        R.copyTo(T(cv::Range(0, 3), cv::Range(0, 3)));
-                        T.at<float>(0, 3) = Porigin.x*1000.0;//mm
-                        T.at<float>(1, 3) = Porigin.y*1000.0;
-                        T.at<float>(2, 3) = Porigin.z*1000.0;
-                        Hs_chess2camera.push_back(T.clone());
-                        std::cout << "3" << std::endl;
-
-                        //-------- robot's end-effector pose.
-                        std::vector<double> eef_pose = urDI->getActualTCPPose();
-                        eef_pose[0] *= 1000.0;eef_pose[1] *= 1000.0;eef_pose[2] *= 1000.0;//mm
-                        cv::Mat H_eef = createHomogeneousMatrix(eef_pose);
-                        Hs_tcp2base.push_back(H_eef.clone());
-
-                        counter++;
+                if (found) {
+                    // Convert rvec and tvec to a homogeneous transformation matrix
+                    cv::Mat R;
+                    cv::Rodrigues(rvec, R);
+                    cv::Mat T = cv::Mat::eye(4, 4, CV_32F);
+                    for (int row = 0; row < 3; ++row) {
+                        for (int col = 0; col < 3; ++col) {
+                            T.at<float>(row, col) = static_cast<float>(R.at<double>(row, col));
+                        }
+                        T.at<float>(row, 3) = static_cast<float>(tvec.at<double>(row)) * 1000.0f; // [m] to [mm]
                     }
+                    Hs_chess2camera.push_back(T.clone());
+                    std::cout << "board pose estimated by solvePnP" << std::endl;
+
+                    //-------- robot's end-effector pose.
+                    std::vector<double> eef_pose = urDI->getActualTCPPose();
+                    eef_pose[0] *= 1000.0;eef_pose[1] *= 1000.0;eef_pose[2] *= 1000.0;//mm
+                    cv::Mat H_eef = createHomogeneousMatrix(eef_pose);
+                    Hs_tcp2base.push_back(H_eef.clone());
+
+                    counter++;
+                }
+            }
                     else {
                         std::cout << "Failed to compute chessboard 3D pose: insufficient or invalid corner depths." << std::endl;
                     }
