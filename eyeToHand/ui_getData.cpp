@@ -115,17 +115,49 @@ void UI_getData::main(std::vector<cv::Mat>& Hs_chess2camera, std::vector<cv::Mat
 
                     counter++;
                 }
+				else {
+					std::cout << "Failed to compute chessboard 3D pose: insufficient or invalid corner depths." << std::endl;
+				}
             }
-                    else {
-                        std::cout << "Failed to compute chessboard 3D pose: insufficient or invalid corner depths." << std::endl;
+			else {
+				std::cout << "Invalid chessboard width or insufficient number of corners detected." << std::endl;
+			}
+		}
+
+        // Save Hs_chess2camera to camera.csv and Hs_tcp2base to robot.csv as (N_data, 16) CSVs
+        {
+            std::ofstream camera_file("camera.csv"), robot_file("robot.csv");
+            if (!camera_file.is_open()) {
+                std::cerr << "Failed to open camera.csv for writing." << std::endl;
+            }
+            if (!robot_file.is_open()) {
+                std::cerr << "Failed to open robot.csv for writing." << std::endl;
+            }
+
+            // Helper lambda to write one 4x4 matrix row-wise flattened
+            auto write_matrix_flattened = [](std::ofstream& file, const cv::Mat& mat) {
+                // mat should be 4x4, type CV_32F
+                for (int row = 0; row < 4; ++row) {
+                    for (int col = 0; col < 4; ++col) {
+                        file << mat.at<float>(row, col);
+                        if (!(row == 3 && col == 3)) file << ",";
                     }
                 }
-                else {
-                    std::cout << "Invalid chessboard width or insufficient number of corners detected." << std::endl;
+                file << "\n";
+            };
+
+            if (camera_file.is_open()) {
+                for (const auto& mat : Hs_chess2camera) {
+                    write_matrix_flattened(camera_file, mat);
                 }
+                camera_file.close();
             }
-            else {
-                std::cout << "Failed to detect sufficient chessboard corners." << std::endl;
+
+            if (robot_file.is_open()) {
+                for (const auto& mat : Hs_tcp2base) {
+                    write_matrix_flattened(robot_file, mat);
+                }
+                robot_file.close();
             }
         }
 
@@ -143,6 +175,7 @@ void UI_getData::main(std::vector<cv::Mat>& Hs_chess2camera, std::vector<cv::Mat
         }
     }
     std::cout << "finish getting data" << std::endl;
+	
 }
 
 void UI_getData::adjustRobot(std::vector<double>& jointValues) {
