@@ -5,9 +5,11 @@
 
 #include "stdafx.h"
 
+extern const int N_NEIGHBOR;
 extern rs2_intrinsics _color_intrinsics;
 extern std::queue<std::pair<cv::Mat, rs2::depth_frame>> q_realsense_img;
-
+extern const int _IMG_WIDTH;//Ximea : 512, RealSense L515:640, D435 : 1280 for depth, 1920
+extern const int _IMG_HEIGHT;//Ximea : 512, RealSense L515:480, D435 : 720 for depth, 1080 for RGB
 extern std::mutex mtxRobot;
 
 /* from joints to robot control */

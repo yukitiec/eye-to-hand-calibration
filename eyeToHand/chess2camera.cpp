@@ -12,7 +12,9 @@ void Chess2camera::main() {
     std::cout << std::endl;
 }
 
-void Chess2camera::getCorners(const cv::Mat& frame, std::vector<cv::Point2f>& corners){
+void Chess2camera::getCorners(const cv::Mat& frame, std::vector<cv::Point2f>& corners,
+    const bool automatic
+    ){
 
 	// Convert to grayscale
 	cv::Mat gray;
@@ -24,7 +26,7 @@ void Chess2camera::getCorners(const cv::Mat& frame, std::vector<cv::Point2f>& co
 		cv::CALIB_CB_ADAPTIVE_THRESH | cv::CALIB_CB_NORMALIZE_IMAGE);
 	if (found) {
 		// Refine corner locations
-		cv::cornerSubPix(gray, corners, cv::Size(7, 7), cv::Size(-1, -1),
+		cv::cornerSubPix(gray, corners, cv::Size(N_NEIGHBOR, N_NEIGHBOR), cv::Size(-1, -1),
 			cv::TermCriteria(cv::TermCriteria::EPS + cv::TermCriteria::COUNT, 100, 0.00001));
 		
         // Draw circles on detected corners
@@ -42,11 +44,16 @@ void Chess2camera::getCorners(const cv::Mat& frame, std::vector<cv::Point2f>& co
         //cv::imwrite("detected.png", image_draw);
         cv::imshow(winName, image_draw);
         cv::waitKey(10);
-        std::cout << "Will you reverse corners order? 0:Okay, 1:reverse corners, 2:change direction, 3:reverse and change direction :: " << std::endl;
-        std::cin >> bool_reverse;
+        if (!automatic) {
+            std::cout << "Will you reverse corners order? 0:Okay, 1:reverse corners, 2:change direction, 3:reverse and change direction :: " << std::endl;
+            std::cin >> bool_reverse;
+        }
+        else
+            bool_reverse = 2;//2->0
 
         // Reverse the vector
         corners_tmp = corners;
+        int counter_reverse = 0;
         while (true) {
             if (bool_reverse == 0) break;
             corners_tmp = corners;
@@ -106,10 +113,20 @@ void Chess2camera::getCorners(const cv::Mat& frame, std::vector<cv::Point2f>& co
                 }
             }
             //cv::imwrite("detected.png", image_draw);
+            if (!automatic) {
+                std::cout << "Is this Okay? 0:Okay, 1:reverse corners, 2:change direction, 3:reverse and change direction :: " << std::endl;
+                std::cin >> bool_reverse;
+            }
+            else {
+                if (counter_reverse == 0)
+                    bool_reverse = 1;
+                else if (counter_reverse==1)
+                    bool_reverse = 0;//2->0
+                counter_reverse += 1;
+            }
+
             cv::imshow(winName, image_draw);
-            cv::waitKey(10);
-            std::cout << "Is this Okay? 0:Okay, 1:reverse corners, 2:change direction, 3:reverse and change direction :: " << std::endl;
-            std::cin >> bool_reverse;
+            cv::waitKey(3);
         }
         //close windows
         //cv::destroyWindow("Detected Corners");

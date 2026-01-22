@@ -1,180 +1,261 @@
 #include "ui_getData.h"
+#include <random>
 
 void UI_getData::main(std::vector<cv::Mat>& Hs_chess2camera, std::vector<cv::Mat>& Hs_tcp2base) {
 
 
-    int counter=0;
+    int counter = 0;
     std::string bool_save, bool_continue;
-    std::string file_path, name_file,file_left,file_right,file_csv;
+    std::string file_path, name_file, file_left, file_right, file_csv;
     std::vector<double> joints_ur, tcp_ur;
     std::array<cv::Mat1b, 2> frames;
     int frameIndex;
 
-    std::cout<<"start collecting data"<<std::endl;
+    // ---- Buffers for calibration data ----
+
+    const std::string sign_save = "s";
+    const std::string sign_quit = "q";
+
+    // ----------------- Helper: capture one calibration sample -----------------
+    auto capture_calibration_sample = [&](int sample_id, bool is_automatic) -> bool {
+        //---------- get an image from RealSense.
+        bool bool_ok = false;
+        cv::Mat img;
+        rs2::depth_frame* aligned_depth_frame = nullptr;
+
+        // Wait until we get one frame from queue
+        while (!bool_ok) {
+            if (!q_realsense_img.empty()) { // not empty
+                std::pair<cv::Mat, rs2::depth_frame> frames = q_realsense_img.front(); // extract data
+                img = frames.first;
+                aligned_depth_frame = &(frames.second); // object -> ptr
+                bool_ok = true;
+            }
+            // optional: std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        }
+
+        //------------ Detect corners.
+        std::vector<cv::Point2f> corners;
+        _corner_detector.getCorners(img, corners, is_automatic);
+
+        // For a chessboard of size width x height, there should be width*height corners
+        const int expected_num_corners = _corner_detector.width * _corner_detector.height;
+
+        if (static_cast<int>(corners.size()) >= expected_num_corners) {
+            // Prepare 3D object points for the chessboard in its coordinate system (z=0 plane)
+            std::vector<cv::Point3f> objectPoints;
+            objectPoints.reserve(expected_num_corners);
+            for (int i = 0; i < _corner_detector.height; ++i) {
+                for (int j = 0; j < _corner_detector.width; ++j) {
+                    objectPoints.emplace_back(
+                        j * _corner_detector.size,
+                        i * _corner_detector.size,
+                        0.0f
+                    );
+                }
+            }
+
+            // Camera parameters
+            cv::Mat cameraMatrix = cv::Mat::eye(3, 3, CV_64F);
+            cameraMatrix.at<double>(0, 0) = _color_intrinsics.fx;  // Focal length in x
+            cameraMatrix.at<double>(1, 1) = _color_intrinsics.fy;  // Focal length in y
+            cameraMatrix.at<double>(0, 2) = _color_intrinsics.ppx; // Principal point x
+            cameraMatrix.at<double>(1, 2) = _color_intrinsics.ppy; // Principal point y
+
+            cv::Mat distCoeffs = cv::Mat::zeros(1, 5, CV_64F);
+
+            cv::Mat rvec, tvec;
+            bool found = cv::solvePnP(objectPoints, corners,
+                cameraMatrix, distCoeffs,
+                rvec, tvec);
+
+            if (found) {
+                // Convert rvec and tvec to a homogeneous transformation matrix
+                cv::Mat R;
+                cv::Rodrigues(rvec, R);
+                cv::Mat T = cv::Mat::eye(4, 4, CV_32F);
+                for (int row = 0; row < 3; ++row) {
+                    for (int col = 0; col < 3; ++col) {
+                        T.at<float>(row, col) = static_cast<float>(R.at<double>(row, col));
+                    }
+                    // NOTE: tvec unit depends on your calibration pipeline; comment says [mm]
+                    T.at<float>(row, 3) = static_cast<float>(tvec.at<double>(row));
+                }
+                Hs_chess2camera.push_back(T.clone());
+                std::cout << "[Sample " << sample_id << "] board pose estimated by solvePnP" << std::endl;
+
+                //-------- robot's end-effector pose.
+                std::vector<double> eef_pose = urDI->getActualTCPPose();
+                // Convert to mm if needed
+                eef_pose[0] *= 1000.0;
+                eef_pose[1] *= 1000.0;
+                eef_pose[2] *= 1000.0;
+                cv::Mat H_eef = createHomogeneousMatrix(eef_pose);
+                Hs_tcp2base.push_back(H_eef.clone());
+
+                return true;
+            }
+            else {
+                std::cout << "[Sample " << sample_id << "] Failed to compute chessboard 3D pose: solvePnP failed." << std::endl;
+                return false;
+            }
+        }
+        else {
+            std::cout << "[Sample " << sample_id << "] Invalid chessboard width or insufficient number of corners detected." << std::endl;
+            return false;
+        }
+    };
+
+
+    // 0: manual, 1: automatic random data collection
+    int collect_mode = 0;
     while (true) {
         //get current robot angles.
-        joints_ur = urDI->getActualQ();
+        std::vector<double> joints_ur = urDI->getActualQ();
 
         std::cout << "$$$$$$$$$$ current joint angle=";
         for (double& joint : joints_ur)
             std::cout << joint << ",";
         std::cout << std::endl;
 
-        //incrementals of each joint angle. 
-        std::vector<double> jointValues(6, 0);
-        //get incremental of each joint.
-        adjustRobot(jointValues);
+        collect_mode = 0;
+        std::cout << "Select data collection mode (0: manual, 1: automatic random): ";
+        std::cin >> collect_mode;
 
-        // ----- move robot with moveJ()
-        for (int j = 0; j < jointValues.size(); j++) {
+        // ---- Parameters for automatic random motion ----
+        std::vector<double> initial_joints = urDI->getActualQ(); // or joints_ivpf
 
-            //crop moved angles.
-            if (jointValues[j] < 0.0) {//negative value
-                jointValues[j] = -std::min(std::abs(jointValues[j]), move_max);
+        // ======================== AUTOMATIC MODE ============================
+        if (collect_mode == 1) {
+            std::cout << "start collecting data (automatic mode)" << std::endl;
+            // ---- Random generator for automatic mode ----
+            int num_auto_samples = 7;       // 10 data collects
+            double range_moveJ = 0.15;       // random range per joint [rad]
+            const double move_max = 0.1;           // manual small step limit [rad]
+            
+            std::cout << "num_samples: ";
+            std::cin >> num_auto_samples;
+            std::cout << "Random joint range ";
+            std::cin >> range_moveJ;
+            
+            std::mt19937 rng(std::random_device{}());
+            std::uniform_real_distribution<double> dist(-range_moveJ, range_moveJ);
+
+            for (int k = 0; k < num_auto_samples; ++k) {
+                std::cout << "Automatic sample " << (k + 1) << " / " << num_auto_samples << std::endl;
+
+                // 1) Generate random joint target around initial_joints
+                std::vector<double> target_joints = initial_joints;
+                for (size_t i = 0; i < target_joints.size(); ++i) {
+                    double delta = dist(rng); // in [-range_moveJ, range_moveJ]
+                    target_joints[i] += delta;
+                }
+
+                // 2) Move robot
+                urCtrl->moveJ(target_joints, 0.5, 0.5); // you can adjust acc/vel
+                std::this_thread::sleep_for(std::chrono::seconds(4));
+
+                // 3) Capture one calibration sample (with corner detection & solvePnP)
+                bool ok = capture_calibration_sample(k + 1,true);
+                if (!ok) {
+                    std::cout << "Warning: sample " << (k + 1) << " invalid (no chessboard / pose)." << std::endl;
+                }
             }
-            else if (jointValues[j] > 0.0) {//negative value
-                jointValues[j] = std::min(jointValues[j], move_max);
-            }
-            //add incremetal angle to current joints.
-            joints_ur[j] += jointValues[j];
+
+            std::cout << "finish automatic data collection" << std::endl;
         }
-        urCtrl->moveJ(joints_ur, 0.5, 0.5);//acceleration, velocity [rad/sec]
-        urCtrl->stopJ();
+        // ======================== MANUAL MODE ===============================
+        else {
+            std::cout << "start collecting data (manual mode)" << std::endl;
 
-        //hear whether save image and TCP pose.
-        std::cout << "Will you save images and TCP pose?" << std::endl;
-        std::cout << "type \'s\' if you wanna save, and otherwise type \'n\':";
-        std::cin >> bool_save;
-
-        //save image and extract 3D position.
-        if (bool_save.compare(sign_save) == 0) {
-            //---------- get an image from RealSense.
-            bool bool_ok = false;
-            cv::Mat img;
-            // Initialize the aligned_depth_frame as an empty/default-constructed frame
-            rs2::depth_frame* aligned_depth_frame = nullptr;
+            int sample_id = 0;
 
 
-            while (!bool_ok) {
-                if (!q_realsense_img.empty()) {//not emppty
-                    std::pair<cv::Mat, rs2::depth_frame> frames = q_realsense_img.front();//extract data.
-                    img = frames.first;
-                    aligned_depth_frame = &(frames.second);//object>ptr
-                    bool_ok = true;
+            //incrementals of each joint angle. 
+            std::vector<double> jointValues(6, 0.0);
+            //get incremental of each joint (e.g., keyboard input, joystick, etc.)
+            adjustRobot(jointValues);
+
+            // ----- move robot with moveJ()
+            for (int j = 0; j < (int)jointValues.size(); j++) {
+                // crop moved angles
+                if (jointValues[j] < 0.0) {
+                    jointValues[j] = -std::min(std::abs(jointValues[j]), move_max);
                 }
+                else if (jointValues[j] > 0.0) {
+                    jointValues[j] = std::min(jointValues[j], move_max);
+                }
+                // add incremental angle to current joints
+                joints_ur[j] += jointValues[j];
             }
+            urCtrl->moveJ(joints_ur, 0.5, 0.5); // acceleration, velocity [rad/sec]
+            urCtrl->stopJ();
 
-            //------------ Detect corners.
-            std::vector<cv::Point2f> corners;
-            _corner_detector.getCorners(img, corners);
+            // ask whether to save image and TCP pose
+            std::cout << "Will you save images and TCP pose?" << std::endl;
+            std::cout << "type 's' if you wanna save, and otherwise type 'n': ";
+            std::cin >> bool_save;
 
-            // For a chessboard of size width x height, there should be width*height corners
-            const int expected_num_corners = _corner_detector.width * _corner_detector.height;
-
-            if (static_cast<int>(corners.size()) >= expected_num_corners) {
-                // Prepare 3D object points for the chessboard in its coordinate system (z=0 plane)
-                std::vector<cv::Point3f> objectPoints;
-                for (int i = 0; i < _corner_detector.height; ++i) {
-                    for (int j = 0; j < _corner_detector.width; ++j) {
-                        objectPoints.emplace_back(j * _corner_detector.square_size, i * _corner_detector.square_size, 0.0f); // square_size is known or provided
-                    }
+            if (bool_save.compare(sign_save) == 0) {
+                ++sample_id;
+                bool ok = capture_calibration_sample(sample_id,false);
+                if (!ok) {
+                    std::cout << "Failed to capture valid sample." << std::endl;
                 }
-
-                // Camera parameters
-                cv::Mat cameraMatrix, distCoeffs;
-                // Assume _color_intrinsics is filled as in pyrealsense2/opencv conversion
-                cameraMatrix = cv::Mat::eye(3, 3, CV_64F);
-                cameraMatrix.at<double>(0, 0) = _color_intrinsics.fx;  // Focal length in x (pixels)
-                cameraMatrix.at<double>(1, 1) = _color_intrinsics.fy;  // Focal length in y (pixels)
-                cameraMatrix.at<double>(0, 2) = _color_intrinsics.ppx; // Principal point x-coordinate (pixels)
-                cameraMatrix.at<double>(1, 2) = _color_intrinsics.ppy; // Principal point y-coordinate (pixels)
-                distCoeffs = cv::Mat::zeros(1, 5, CV_64F);
-
-                cv::Mat rvec, tvec;
-                bool found = cv::solvePnP(objectPoints, corners, cameraMatrix, distCoeffs, rvec, tvec);
-
-                if (found) {
-                    // Convert rvec and tvec to a homogeneous transformation matrix
-                    cv::Mat R;
-                    cv::Rodrigues(rvec, R);
-                    cv::Mat T = cv::Mat::eye(4, 4, CV_32F);
-                    for (int row = 0; row < 3; ++row) {
-                        for (int col = 0; col < 3; ++col) {
-                            T.at<float>(row, col) = static_cast<float>(R.at<double>(row, col));
-                        }
-                        T.at<float>(row, 3) = static_cast<float>(tvec.at<double>(row)) * 1000.0f; // [m] to [mm]
-                    }
-                    Hs_chess2camera.push_back(T.clone());
-                    std::cout << "board pose estimated by solvePnP" << std::endl;
-
-                    //-------- robot's end-effector pose.
-                    std::vector<double> eef_pose = urDI->getActualTCPPose();
-                    eef_pose[0] *= 1000.0;eef_pose[1] *= 1000.0;eef_pose[2] *= 1000.0;//mm
-                    cv::Mat H_eef = createHomogeneousMatrix(eef_pose);
-                    Hs_tcp2base.push_back(H_eef.clone());
-
-                    counter++;
-                }
-				else {
-					std::cout << "Failed to compute chessboard 3D pose: insufficient or invalid corner depths." << std::endl;
-				}
-            }
-			else {
-				std::cout << "Invalid chessboard width or insufficient number of corners detected." << std::endl;
-			}
-		}
-
-        // Save Hs_chess2camera to camera.csv and Hs_tcp2base to robot.csv as (N_data, 16) CSVs
-        {
-            std::ofstream camera_file("camera.csv"), robot_file("robot.csv");
-            if (!camera_file.is_open()) {
-                std::cerr << "Failed to open camera.csv for writing." << std::endl;
-            }
-            if (!robot_file.is_open()) {
-                std::cerr << "Failed to open robot.csv for writing." << std::endl;
-            }
-
-            // Helper lambda to write one 4x4 matrix row-wise flattened
-            auto write_matrix_flattened = [](std::ofstream& file, const cv::Mat& mat) {
-                // mat should be 4x4, type CV_32F
-                for (int row = 0; row < 4; ++row) {
-                    for (int col = 0; col < 4; ++col) {
-                        file << mat.at<float>(row, col);
-                        if (!(row == 3 && col == 3)) file << ",";
-                    }
-                }
-                file << "\n";
-            };
-
-            if (camera_file.is_open()) {
-                for (const auto& mat : Hs_chess2camera) {
-                    write_matrix_flattened(camera_file, mat);
-                }
-                camera_file.close();
-            }
-
-            if (robot_file.is_open()) {
-                for (const auto& mat : Hs_tcp2base) {
-                    write_matrix_flattened(robot_file, mat);
-                }
-                robot_file.close();
             }
         }
-
-        //continue
+        //continue?
         std::cout << "Will you continue?" << std::endl;
-        std::cout << "type \'c\' if you wanna continue, and if you wanna quit, type \'q\':";
+        std::cout << "type 'c' if you wanna continue, and if you wanna quit, type 'q': ";
         std::cin >> bool_continue;
-        //save data
+
         if (bool_continue.compare(sign_quit) == 0) {
             std::cout << "Will you really stop?" << std::endl;
-            std::cout << "type \'q\' if you wanna quit, and otherwise type \'c\':";
+            std::cout << "type 'q' if you wanna quit, and otherwise type 'c': ";
             std::cin >> bool_continue;
             if (bool_continue.compare(sign_quit) == 0)
                 break;
         }
+
+        std::cout << "finish getting data (manual mode)" << std::endl;
     }
-    std::cout << "finish getting data" << std::endl;
+
+    // ======================= SAVE MATRICES TO CSV =======================
+    // Save Hs_chess2camera to camera.csv and Hs_tcp2base to robot.csv as (N_data, 16) CSVs
+    {
+        std::ofstream camera_file("camera.csv"), robot_file("robot.csv");
+        if (!camera_file.is_open()) {
+            std::cerr << "Failed to open camera.csv for writing." << std::endl;
+        }
+        if (!robot_file.is_open()) {
+            std::cerr << "Failed to open robot.csv for writing." << std::endl;
+        }
+
+        auto write_matrix_flattened = [](std::ofstream& file, const cv::Mat& mat) {
+            // mat should be 4x4, type CV_32F
+            for (int row = 0; row < 4; ++row) {
+                for (int col = 0; col < 4; ++col) {
+                    file << mat.at<float>(row, col);
+                    if (!(row == 3 && col == 3)) file << ",";
+                }
+            }
+            file << "\n";
+            };
+
+        if (camera_file.is_open()) {
+            for (const auto& mat : Hs_chess2camera) {
+                write_matrix_flattened(camera_file, mat);
+            }
+            camera_file.close();
+        }
+
+        if (robot_file.is_open()) {
+            for (const auto& mat : Hs_tcp2base) {
+                write_matrix_flattened(robot_file, mat);
+            }
+            robot_file.close();
+        }
+    }
 	
 }
 

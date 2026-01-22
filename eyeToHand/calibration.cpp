@@ -31,13 +31,13 @@ void Calibration::main() {
             if (bool_mode.compare(sign_continue) == 0) {
                 //collect data for eye to hand calibration.
                 //------- move robot to initial position
-                std::vector<double> config_init{ 
-                        PI / 180 * 36.62,//12.16,
-                        PI / 180 * -34.7,//(-42.68), 
-                        PI / 180 * -123.39,//(-139.34),
-                        PI / 180 * -20.42,//(-0.60),
-                        PI / 180 * 124.72,//110.4,
-                        PI / 180 * -100.41//(-88.87)
+                std::vector<double> config_init{ //
+                        PI / 180 * -12.62,//36.62,//12.16,
+                        PI / 180 * -132.0,//-34.7,//(-42.68), 
+                        PI / 180 * -35.0,//-123.39,//(-139.34),
+                        PI / 180 * -57.0,//-20.42,//(-0.60),
+                        PI / 180 * 214,//124.72,//110.4,
+                        PI / 180 * -100.0//-100.41//(-88.87)
                 };
                 urCtrl->moveJ(config_init, 0.5, 0.5);//speed, acceleration
 				

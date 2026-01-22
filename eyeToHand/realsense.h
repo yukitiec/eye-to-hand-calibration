@@ -8,8 +8,8 @@ using namespace std;
 class RealSense {
 public:
 	// Define stream parameters
-	const int _W = 640;
-	const int _H = 480;
+	const int _W = _IMG_WIDTH;
+	const int _H = _IMG_HEIGHT;
 	const int _FPS = 30;
 
 	const size_t kMaxRsQueueSize = 5;

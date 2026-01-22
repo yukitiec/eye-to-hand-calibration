@@ -1,6 +1,8 @@
 #pragma once
 
 #include "stdafx.h"
+#include "global_parameters.h"
+
 class Chess2camera {
 private:
 
@@ -30,7 +32,8 @@ public:
 
     
     //--- Get corners of chessboard.
-    void getCorners(const cv::Mat& frame, std::vector<cv::Point2f>& corners);
+    void getCorners(const cv::Mat& frame, std::vector<cv::Point2f>& corners,
+        const bool automatic=false);
 
 
 };
