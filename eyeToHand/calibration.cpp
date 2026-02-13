@@ -68,7 +68,7 @@ void Calibration::main() {
             // Compose 4x4 homogeneous camera-to-base transformation matrix
             size_t num_pose = Hs_chess2camera.size();
             cv::Mat H_cam2base = cv::Mat::eye(4, 4, CV_64F);
-            if (type_process == 1) {
+            if (type_process == 1) {//eye-to-hand
                 
                 if (num_pose != Hs_tcp2base.size()) {
                     std::cerr << "[Calibration] Number of board and tcp poses does not match!\n";
@@ -139,7 +139,7 @@ void Calibration::main() {
                     file_transform.close();
                 }
             }
-            else {
+            else {//evalluation
                 // Load transformation from CSV
                 std::ifstream file_transform("transform_camera2base.csv");
                 if (!file_transform.is_open()) {
@@ -166,29 +166,46 @@ void Calibration::main() {
             // For each frame, check camera estimate in base frame:
             // P_base_est = H_cam2base * H_chess2camera
             // Compare translation against true tcp pose (Hs_tcp2base)
-            for (size_t i = 0; i < num_pose; ++i) {
-                cv::Mat H_cam2base_64F = H_cam2base;
-                cv::Mat H_chess2camera_64F = Hs_chess2camera[i];
-                if (H_chess2camera_64F.type() != CV_64F)
-                    H_chess2camera_64F.convertTo(H_chess2camera_64F, CV_64F);
+            // Open eval.csv for writing: the first row is header
+            std::ofstream eval_file("eval.csv");
+            if (!eval_file.is_open()) {
+                std::cerr << "Error opening eval.csv for writing." << std::endl;
+            } else {
+                eval_file << "frame,"
+                          << "est_x,est_y,est_z,"
+                          << "true_x,true_y,true_z,"
+                          << "position_error_mm\n";
+                for (size_t i = 0; i < num_pose; ++i) {
+                    cv::Mat H_cam2base_64F = H_cam2base;
+                    cv::Mat H_chess2camera_64F = Hs_chess2camera[i];
+                    if (H_chess2camera_64F.type() != CV_64F)
+                        H_chess2camera_64F.convertTo(H_chess2camera_64F, CV_64F);
 
-                cv::Mat H_est_base = H_cam2base_64F * H_chess2camera_64F;
+                    cv::Mat H_est_base = H_cam2base_64F * H_chess2camera_64F;
 
-                cv::Mat t_est = H_est_base(cv::Rect(3,0,1,3)).clone();
-                cv::Mat t_true = Hs_tcp2base[i](cv::Rect(3,0,1,3)).clone();
-                if (t_true.type() != CV_64F)
-                    t_true.convertTo(t_true, CV_64F);
+                    cv::Mat t_est = H_est_base(cv::Rect(3,0,1,3)).clone();
+                    cv::Mat t_true = Hs_tcp2base[i](cv::Rect(3,0,1,3)).clone();
+                    if (t_true.type() != CV_64F)
+                        t_true.convertTo(t_true, CV_64F);
 
-                cv::Mat diff = t_est - t_true;
-                double error = cv::norm(diff);
+                    cv::Mat diff = t_est - t_true;
+                    double error = cv::norm(diff);
 
-                std::cout << "--- Frame " << i << " ---\n";
-                std::cout << "Estimated end-effector (from camera): [" << t_est.at<double>(0) << ", "
-                            << t_est.at<double>(1) << ", " << t_est.at<double>(2) << "]\n";
-                std::cout << "Actual end-effector (from robot):      [" << t_true.at<double>(0) << ", "
-                            << t_true.at<double>(1) << ", " << t_true.at<double>(2) << "]\n";
-                std::cout << "Position error: " << error << " mm\n";
-                std::cout << "--------------------------" << std::endl;
+                    std::cout << "--- Frame " << i << " ---\n";
+                    std::cout << "Estimated end-effector (from camera): [" << t_est.at<double>(0) << ", "
+                                << t_est.at<double>(1) << ", " << t_est.at<double>(2) << "]\n";
+                    std::cout << "Actual end-effector (from robot):      [" << t_true.at<double>(0) << ", "
+                                << t_true.at<double>(1) << ", " << t_true.at<double>(2) << "]\n";
+                    std::cout << "Position error: " << error << " mm\n";
+                    std::cout << "--------------------------" << std::endl;
+
+                    // Save to CSV
+                    eval_file << i << ","
+                              << t_est.at<double>(0) << "," << t_est.at<double>(1) << "," << t_est.at<double>(2) << ","
+                              << t_true.at<double>(0) << "," << t_true.at<double>(1) << "," << t_true.at<double>(2) << ","
+                              << error << "\n";
+                }
+                eval_file.close();
             }
         }
 
