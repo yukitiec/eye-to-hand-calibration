@@ -1,7 +1,29 @@
 #include "ui_getData.h"
 #include <random>
 
-void UI_getData::main(std::vector<cv::Mat>& Hs_chess2camera, std::vector<cv::Mat>& Hs_tcp2base) {
+void UI_getData::main(std::vector<cv::Mat>& Hs_chess2camera, std::vector<cv::Mat>& Hs_tcp2base, const int mode_idx) {
+
+    //file 
+    const std::string poseCsv = "saved_joints.csv";
+    if (mode_idx == 1) {//Eye-to-hand calibration
+        auto savedPoses = loadPosesCSV(poseCsv);
+        if (!savedPoses.empty()) {
+            replaySavedPoses(savedPoses, urCtrl, Hs_chess2camera, Hs_tcp2base);
+            // Option 2: pass a raw pointer
+            // ui.replaySavedPoses(savedPoses, urCtrl.get(), Hs_chess2camera, Hs_tcp2base);
+        }
+    }
+    else {//evaluaiton.
+        const std::string poseCsv_eval = "saved_joints_eval.csv";
+        auto savedPoses = loadPosesCSV(poseCsv_eval);
+        if (!savedPoses.empty()) {
+            replaySavedPoses(savedPoses, urCtrl, Hs_chess2camera, Hs_tcp2base);
+            // Option 2: pass a raw pointer
+            // ui.replaySavedPoses(savedPoses, urCtrl.get(), Hs_chess2camera, Hs_tcp2base);
+        }
+        return;//
+    }
+
 
 
     int counter = 0;
@@ -17,94 +39,7 @@ void UI_getData::main(std::vector<cv::Mat>& Hs_chess2camera, std::vector<cv::Mat
     const std::string sign_quit = "q";
 
     // ----------------- Helper: capture one calibration sample -----------------
-    auto capture_calibration_sample = [&](int sample_id, bool is_automatic) -> bool {
-        //---------- get an image from RealSense.
-        bool bool_ok = false;
-        cv::Mat img;
-        rs2::depth_frame* aligned_depth_frame = nullptr;
 
-        // Wait until we get one frame from queue
-        while (!bool_ok) {
-            if (!q_realsense_img.empty()) { // not empty
-                std::pair<cv::Mat, rs2::depth_frame> frames = q_realsense_img.front(); // extract data
-                img = frames.first;
-                aligned_depth_frame = &(frames.second); // object -> ptr
-                bool_ok = true;
-            }
-            // optional: std::this_thread::sleep_for(std::chrono::milliseconds(10));
-        }
-
-        //------------ Detect corners.
-        std::vector<cv::Point2f> corners;
-        _corner_detector.getCorners(img, corners, is_automatic);
-
-        // For a chessboard of size width x height, there should be width*height corners
-        const int expected_num_corners = _corner_detector.width * _corner_detector.height;
-
-        if (static_cast<int>(corners.size()) >= expected_num_corners) {
-            // Prepare 3D object points for the chessboard in its coordinate system (z=0 plane)
-            std::vector<cv::Point3f> objectPoints;
-            objectPoints.reserve(expected_num_corners);
-            for (int i = 0; i < _corner_detector.height; ++i) {
-                for (int j = 0; j < _corner_detector.width; ++j) {
-                    objectPoints.emplace_back(
-                        j * _corner_detector.size,
-                        i * _corner_detector.size,
-                        0.0f
-                    );
-                }
-            }
-
-            // Camera parameters
-            cv::Mat cameraMatrix = cv::Mat::eye(3, 3, CV_64F);
-            cameraMatrix.at<double>(0, 0) = _color_intrinsics.fx;  // Focal length in x
-            cameraMatrix.at<double>(1, 1) = _color_intrinsics.fy;  // Focal length in y
-            cameraMatrix.at<double>(0, 2) = _color_intrinsics.ppx; // Principal point x
-            cameraMatrix.at<double>(1, 2) = _color_intrinsics.ppy; // Principal point y
-
-            cv::Mat distCoeffs = cv::Mat::zeros(1, 5, CV_64F);
-
-            cv::Mat rvec, tvec;
-            bool found = cv::solvePnP(objectPoints, corners,
-                cameraMatrix, distCoeffs,
-                rvec, tvec);
-
-            if (found) {
-                // Convert rvec and tvec to a homogeneous transformation matrix
-                cv::Mat R;
-                cv::Rodrigues(rvec, R);
-                cv::Mat T = cv::Mat::eye(4, 4, CV_32F);
-                for (int row = 0; row < 3; ++row) {
-                    for (int col = 0; col < 3; ++col) {
-                        T.at<float>(row, col) = static_cast<float>(R.at<double>(row, col));
-                    }
-                    // NOTE: tvec unit depends on your calibration pipeline; comment says [mm]
-                    T.at<float>(row, 3) = static_cast<float>(tvec.at<double>(row));
-                }
-                Hs_chess2camera.push_back(T.clone());
-                std::cout << "[Sample " << sample_id << "] board pose estimated by solvePnP" << std::endl;
-
-                //-------- robot's end-effector pose.
-                std::vector<double> eef_pose = urDI->getActualTCPPose();
-                // Convert to mm if needed
-                eef_pose[0] *= 1000.0;
-                eef_pose[1] *= 1000.0;
-                eef_pose[2] *= 1000.0;
-                cv::Mat H_eef = createHomogeneousMatrix(eef_pose);
-                Hs_tcp2base.push_back(H_eef.clone());
-
-                return true;
-            }
-            else {
-                std::cout << "[Sample " << sample_id << "] Failed to compute chessboard 3D pose: solvePnP failed." << std::endl;
-                return false;
-            }
-        }
-        else {
-            std::cout << "[Sample " << sample_id << "] Invalid chessboard width or insufficient number of corners detected." << std::endl;
-            return false;
-        }
-    };
 
 
     // 0: manual, 1: automatic random data collection
@@ -156,8 +91,12 @@ void UI_getData::main(std::vector<cv::Mat>& Hs_chess2camera, std::vector<cv::Mat
                 std::this_thread::sleep_for(std::chrono::seconds(4));
 
                 // 3) Capture one calibration sample (with corner detection & solvePnP)
-                bool ok = capture_calibration_sample(k + 1,true);
-                if (!ok) {
+                bool ok = capture_calibration_sample(k + 1,true, Hs_chess2camera, Hs_tcp2base);
+                if (ok) {
+                    // Save only when capture succeeded
+                    appendPoseCSV(poseCsv, target_joints);
+                }
+                else {
                     std::cout << "Warning: sample " << (k + 1) << " invalid (no chessboard / pose)." << std::endl;
                 }
             }
@@ -198,8 +137,12 @@ void UI_getData::main(std::vector<cv::Mat>& Hs_chess2camera, std::vector<cv::Mat
 
             if (bool_save.compare(sign_save) == 0) {
                 ++sample_id;
-                bool ok = capture_calibration_sample(sample_id,false);
-                if (!ok) {
+                bool ok = capture_calibration_sample(sample_id,false, Hs_chess2camera, Hs_tcp2base);
+                if (ok) {
+                    // Save only when capture succeeded
+                    appendPoseCSV(poseCsv, joints_ur);
+                }
+                else {
                     std::cout << "Failed to capture valid sample." << std::endl;
                 }
             }
@@ -259,6 +202,97 @@ void UI_getData::main(std::vector<cv::Mat>& Hs_chess2camera, std::vector<cv::Mat
 	
 }
 
+bool UI_getData::capture_calibration_sample(int sample_id, bool is_automatic, std::vector<cv::Mat>& Hs_chess2camera, std::vector<cv::Mat>& Hs_tcp2base)
+{
+    //---------- get an image from RealSense.
+    bool bool_ok = false;
+    cv::Mat img;
+    rs2::depth_frame* aligned_depth_frame = nullptr;
+
+    // Wait until we get one frame from queue
+    while (!bool_ok) {
+        if (!q_realsense_img.empty()) { // not empty
+            std::pair<cv::Mat, rs2::depth_frame> frames = q_realsense_img.front(); // extract data
+            img = frames.first;
+            aligned_depth_frame = &(frames.second); // object -> ptr
+            bool_ok = true;
+        }
+        // optional: std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+
+    //------------ Detect corners.
+    std::vector<cv::Point2f> corners;
+    _corner_detector.getCorners(img, corners, is_automatic);
+
+    // For a chessboard of size width x height, there should be width*height corners
+    const int expected_num_corners = _corner_detector.width * _corner_detector.height;
+
+    if (static_cast<int>(corners.size()) >= expected_num_corners) {
+        // Prepare 3D object points for the chessboard in its coordinate system (z=0 plane)
+        std::vector<cv::Point3f> objectPoints;
+        objectPoints.reserve(expected_num_corners);
+        for (int i = 0; i < _corner_detector.height; ++i) {
+            for (int j = 0; j < _corner_detector.width; ++j) {
+                objectPoints.emplace_back(
+                    j * _corner_detector.size,
+                    i * _corner_detector.size,
+                    0.0f
+                );
+            }
+        }
+
+        // Camera parameters
+        cv::Mat cameraMatrix = cv::Mat::eye(3, 3, CV_64F);
+        cameraMatrix.at<double>(0, 0) = _color_intrinsics.fx;  // Focal length in x
+        cameraMatrix.at<double>(1, 1) = _color_intrinsics.fy;  // Focal length in y
+        cameraMatrix.at<double>(0, 2) = _color_intrinsics.ppx; // Principal point x
+        cameraMatrix.at<double>(1, 2) = _color_intrinsics.ppy; // Principal point y
+
+        cv::Mat distCoeffs = cv::Mat::zeros(1, 5, CV_64F);
+
+        cv::Mat rvec, tvec;
+        bool found = cv::solvePnP(objectPoints, corners,
+            cameraMatrix, distCoeffs,
+            rvec, tvec);
+
+        if (found) {
+            // Convert rvec and tvec to a homogeneous transformation matrix
+            cv::Mat R;
+            cv::Rodrigues(rvec, R);
+            cv::Mat T = cv::Mat::eye(4, 4, CV_32F);
+            for (int row = 0; row < 3; ++row) {
+                for (int col = 0; col < 3; ++col) {
+                    T.at<float>(row, col) = static_cast<float>(R.at<double>(row, col));
+                }
+                // NOTE: tvec unit depends on your calibration pipeline; comment says [mm]
+                T.at<float>(row, 3) = static_cast<float>(tvec.at<double>(row));
+            }
+            Hs_chess2camera.push_back(T.clone());
+            std::cout << "[Sample " << sample_id << "] board pose estimated by solvePnP" << std::endl;
+
+            //-------- robot's end-effector pose.
+            std::vector<double> eef_pose = urDI->getActualTCPPose();
+            // Convert to mm if needed
+            eef_pose[0] *= 1000.0;
+            eef_pose[1] *= 1000.0;
+            eef_pose[2] *= 1000.0;
+            cv::Mat H_eef = createHomogeneousMatrix(eef_pose);
+            std::cout << "H_eef=" << H_eef << std::endl;
+            Hs_tcp2base.push_back(H_eef.clone());
+
+            return true;
+        }
+        else {
+            std::cout << "[Sample " << sample_id << "] Failed to compute chessboard 3D pose: solvePnP failed." << std::endl;
+            return false;
+        }
+    }
+    else {
+        std::cout << "[Sample " << sample_id << "] Invalid chessboard width or insufficient number of corners detected." << std::endl;
+        return false;
+    }
+};
+
 void UI_getData::adjustRobot(std::vector<double>& jointValues) {
 
     std::cout << "Please input values for the following joints:\n";
@@ -305,16 +339,16 @@ cv::Mat UI_getData::createHomogeneousMatrix(std::vector<double>& pose) {
     
     ////normalize between 0 and pi
     double norm_rvec = cv::norm(rvec);
-    if (norm_rvec > PI) {//0<=theta<=PI
-        double theta = std::fmod(norm_rvec, 2.0 * PI);
-        if (theta <= PI) {
-            rvec = theta / norm_rvec * rvec;
-        }
-        else if (theta > PI) {//PI<theta<=2*PI
-            theta = theta - 2.0 * PI;
-            rvec = theta / norm_rvec * rvec;
-        }
-    }
+    //if (norm_rvec > PI) {//0<=theta<=PI
+    //    double theta = std::fmod(norm_rvec, 2.0 * PI);
+    //    if (theta <= PI) {
+    //        rvec = theta / norm_rvec * rvec;
+    //    }
+    //    else if (theta > PI) {//PI<theta<=2*PI
+    //        theta = theta - 2.0 * PI;
+    //        rvec = theta / norm_rvec * rvec;
+    //    }
+    //}
 
     // Convert rotation vector to rotation matrix
     cv::Mat R;
@@ -324,11 +358,81 @@ cv::Mat UI_getData::createHomogeneousMatrix(std::vector<double>& pose) {
     cv::Mat t = (cv::Mat_<double>(3, 1) << pose[0], pose[1], pose[2]);
     
     //create homogeneous matrix
-    cv::Mat H_matrix;
-    cv::Mat oneVec = cv::Mat1d::zeros(1, 4);
-    oneVec.at<double>(0, 3) = 1;
-    cv::hconcat(R, t, H_matrix);
-    cv::vconcat(H_matrix, oneVec, H_matrix);
+    cv::Mat H_matrix = cv::Mat::eye(4, 4, CV_32F);
+    for (int row = 0; row < 3; ++row) {
+        for (int col = 0; col < 3; ++col) {
+            H_matrix.at<float>(row, col) = static_cast<float>(R.at<double>(row, col));
+        }
+        // NOTE: tvec unit depends on your calibration pipeline; comment says [mm]
+        H_matrix.at<float>(row, 3) = static_cast<float>(t.at<double>(row));
+    }
+    //cv::Mat oneVec = cv::Mat1d::zeros(1, 4);
+    //oneVec.at<double>(0, 3) = 1;
+    //cv::hconcat(R, t, H_matrix);
+    //cv::vconcat(H_matrix, oneVec, H_matrix);
 
     return H_matrix;
+}
+
+void UI_getData::appendPoseCSV(const std::string& path, const std::vector<double>& joints) {
+    std::ifstream ifs(path);
+    bool hasFile = ifs.good();
+    ifs.close();
+
+    std::ofstream ofs(path, std::ios::app);
+    if (!hasFile) {
+        ofs << "j1,j2,j3,j4,j5,j6\n";
+    }
+    for (size_t i = 0; i < joints.size(); ++i) {
+        ofs << joints[i];
+        if (i + 1 < joints.size()) ofs << ",";
+    }
+    ofs << "\n";
+}
+
+// Load all 6-DOF joint poses from CSV
+std::vector<std::vector<double>> UI_getData::loadPosesCSV(const std::string& path) {
+    std::vector<std::vector<double>> poses;
+    std::ifstream ifs(path);
+    if (!ifs) return poses;
+
+    std::string line;
+    bool isHeader = true;
+    while (std::getline(ifs, line)) {
+        if (line.empty()) continue;
+        if (isHeader) { isHeader = false; continue; } // skip header
+
+        std::vector<double> pose;
+        std::stringstream ss(line);
+        std::string item;
+        while (std::getline(ss, item, ',')) {
+            try { pose.push_back(std::stod(item)); }
+            catch (...) { pose.clear(); break; }
+        }
+        if (pose.size() == 6) poses.push_back(pose);
+    }
+    return poses;
+}
+
+void UI_getData::replaySavedPoses(const std::vector<std::vector<double>>& poses,
+    ur_rtde::RTDEControlInterface* urCtrl, std::vector<cv::Mat>& Hs_chess2camera, std::vector<cv::Mat>& Hs_tcp2base) {
+    if (!urCtrl) {
+        std::cerr << "RTDEControlInterface pointer is null; cannot replay poses.\n";
+        return;
+    }
+
+    std::cout << "Replaying " << poses.size() << " saved poses...\n Wait for 15 seconds ... ";
+    std::this_thread::sleep_for(std::chrono::seconds(15));
+    for (size_t i = 0; i < poses.size(); ++i) {
+        std::cout << "Moving to saved pose " << (i + 1) << " / " << poses.size() << "\n";
+        urCtrl->moveJ(poses[i], 0.5, 0.5); // acc, vel (adjust to your API order if needed)
+        std::this_thread::sleep_for(std::chrono::seconds(5));
+
+        bool ok = this->capture_calibration_sample(static_cast<int>(i + 1), true, Hs_chess2camera, Hs_tcp2base);
+        if (!ok) {
+            std::cout << "Warning: replay sample " << (i + 1)
+                << " invalid (no chessboard / pose)." << std::endl;
+        }
+    }
+    std::cout << "Replay finished.\n";
 }

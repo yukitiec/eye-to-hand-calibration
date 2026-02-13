@@ -24,39 +24,52 @@ void Calibration::main() {
         //get running types
         std::cout << ":: Which procedure will you do? input an integer.\n 1: get data for eye to hand calibration.\n 2: evaluate sterep camera accuracy. check depth. \n";
         std::cin >> type_process;
-        if (type_process == 1) {
-            std::cout << "You chose Eye-to-Hand calibration. If it's okay type \'c\'. If you want to change mode, type \'q\'" << std::endl;
-            std::cin >> bool_mode;
-            //save data
-            if (bool_mode.compare(sign_continue) == 0) {
-                //collect data for eye to hand calibration.
-                //------- move robot to initial position
-                std::vector<double> config_init{ //
-                        PI / 180 * -12.62,//36.62,//12.16,
-                        PI / 180 * -132.0,//-34.7,//(-42.68), 
-                        PI / 180 * -35.0,//-123.39,//(-139.34),
-                        PI / 180 * -57.0,//-20.42,//(-0.60),
-                        PI / 180 * 214,//124.72,//110.4,
-                        PI / 180 * -100.0//-100.41//(-88.87)
-                };
-                urCtrl->moveJ(config_init, 0.5, 0.5);//speed, acceleration
+        std::cout << "You chose Eye-to-Hand calibration. If it's okay type \'c\'. If you want to change mode, type \'q\'" << std::endl;
+        std::cin >> bool_mode;
+        //save data
+        if (bool_mode.compare(sign_continue) == 0) {
+            //collect data for eye to hand calibration.
+            //------- move robot to initial position
+            //for tidyup
+            std::vector<double> config_init{ //
+                    PI / 180 * -12.62,//36.62,//12.16,
+                    PI / 180 * -132.0,//-34.7,//(-42.68), 
+                    PI / 180 * -35.0,//-123.39,//(-139.34),
+                    PI / 180 * -57.0,//-20.42,//(-0.60),
+                    PI / 180 * 214,//124.72,//110.4,
+                    PI / 180 * -100.0//-100.41//(-88.87)
+            };
+
+            //for catching
+            //std::vector<double> config_init{ //
+            //        PI / 180 * -4.5,//36.62,//12.16,
+            //        PI / 180 * -31.0,//-34.7,//(-42.68), 
+            //        PI / 180 * -105.0,//-123.39,//(-139.34),
+            //        PI / 180 * -21.0,//-20.42,//(-0.60),
+            //        PI / 180 * 91.0,//124.72,//110.4,
+            //        PI / 180 * -103.0//-100.41//(-88.87)
+            //};
+            urCtrl->moveJ(config_init, 0.5, 0.5);//speed, acceleration
 				
 
-				//--- Collect data & save 3D pose pairs.
-				std::vector<cv::Mat> Hs_chess2camera; 
-				std::vector<cv::Mat> Hs_tcp2base;
-				ui.main(Hs_chess2camera, Hs_tcp2base);
-                q_end_process.push(true);
+			//--- Collect data & save 3D pose pairs.
+			std::vector<cv::Mat> Hs_chess2camera; 
+			std::vector<cv::Mat> Hs_tcp2base;
+			ui.main(Hs_chess2camera, Hs_tcp2base, type_process);
+            q_end_process.push(true);
 
-                // ---- Eye-to-Hand Calibration Main Block ----
-                // Note:
-                // Hs_chess2camera: 4x4 homogeneous pose of the calibration target (chessboard/board) in the *camera* frame.
-                // Hs_tcp2base: 4x4 homogeneous pose of the end-effector (tcp) in the *robot base* frame.
-                // In cv::calibrateHandEye, the classical convention is:
-                //   A : end-effector in base (base->tcp), which here is (Hs_tcp2base)^-1
-                //   B : calibration target in camera (chess2camera), i.e. Hs_chess2camera
-
-                size_t num_pose = Hs_chess2camera.size();
+            // ---- Eye-to-Hand Calibration Main Block ----
+            // Note:
+            // Hs_chess2camera: 4x4 homogeneous pose of the calibration target (chessboard/board) in the *camera* frame.
+            // Hs_tcp2base: 4x4 homogeneous pose of the end-effector (tcp) in the *robot base* frame.
+            // In cv::calibrateHandEye, the classical convention is:
+            //   A : end-effector in base (base->tcp), which here is (Hs_tcp2base)^-1
+            //   B : calibration target in camera (chess2camera), i.e. Hs_chess2camera
+            // Compose 4x4 homogeneous camera-to-base transformation matrix
+            size_t num_pose = Hs_chess2camera.size();
+            cv::Mat H_cam2base = cv::Mat::eye(4, 4, CV_64F);
+            if (type_process == 1) {
+                
                 if (num_pose != Hs_tcp2base.size()) {
                     std::cerr << "[Calibration] Number of board and tcp poses does not match!\n";
                     return;
@@ -76,8 +89,8 @@ void Calibration::main() {
                     if (H_base2tcp.type() != CV_64F)
                         H_base2tcp.convertTo(H_base2tcp, CV_64F);
 
-                    R_gripper2base[idx] = H_base2tcp(cv::Rect(0,0,3,3)).clone();
-                    t_gripper2base[idx] = H_base2tcp(cv::Rect(3,0,1,3)).clone();
+                    R_gripper2base[idx] = H_base2tcp(cv::Rect(0, 0, 3, 3)).clone();
+                    t_gripper2base[idx] = H_base2tcp(cv::Rect(3, 0, 1, 3)).clone();
                     if (R_gripper2base[idx].type() != CV_64F)
                         R_gripper2base[idx].convertTo(R_gripper2base[idx], CV_64F);
                     if (t_gripper2base[idx].type() != CV_64F)
@@ -89,8 +102,8 @@ void Calibration::main() {
                     if (H_target2cam.type() != CV_64F)
                         H_target2cam.convertTo(H_target2cam, CV_64F);
 
-                    R_target2cam[idx] = H_target2cam(cv::Rect(0,0,3,3)).clone();
-                    t_target2cam[idx] = H_target2cam(cv::Rect(3,0,1,3)).clone();
+                    R_target2cam[idx] = H_target2cam(cv::Rect(0, 0, 3, 3)).clone();
+                    t_target2cam[idx] = H_target2cam(cv::Rect(3, 0, 1, 3)).clone();
                     if (R_target2cam[idx].type() != CV_64F)
                         R_target2cam[idx].convertTo(R_target2cam[idx], CV_64F);
                     if (t_target2cam[idx].type() != CV_64F)
@@ -106,16 +119,15 @@ void Calibration::main() {
                     cv::CALIB_HAND_EYE_TSAI
                 );
 
-                // Compose 4x4 homogeneous camera-to-base transformation matrix
-                cv::Mat H_cam2base = cv::Mat::eye(4,4,CV_64F);
-                R_cam2base.copyTo(H_cam2base(cv::Range(0,3), cv::Range(0,3)));
-                t_cam2base.copyTo(H_cam2base(cv::Range(0,3), cv::Range(3,4)));
+                R_cam2base.copyTo(H_cam2base(cv::Range(0, 3), cv::Range(0, 3)));
+                t_cam2base.copyTo(H_cam2base(cv::Range(0, 3), cv::Range(3, 4)));
 
                 // Save transformation
                 std::ofstream file_transform("transform_camera2base.csv");
                 if (!file_transform.is_open()) {
                     std::cerr << "Error opening file for writing." << std::endl;
-                } else {
+                }
+                else {
                     for (int row = 0; row < H_cam2base.rows; ++row) {
                         for (int col = 0; col < H_cam2base.cols; ++col) {
                             file_transform << H_cam2base.at<double>(row, col);
@@ -126,35 +138,57 @@ void Calibration::main() {
                     }
                     file_transform.close();
                 }
-
-                // ------ Evaluation of the calibration ------
-                // For each frame, check camera estimate in base frame:
-                // P_base_est = H_cam2base * H_chess2camera
-                // Compare translation against true tcp pose (Hs_tcp2base)
-                for (size_t i = 0; i < num_pose; ++i) {
-                    cv::Mat H_cam2base_64F = H_cam2base;
-                    cv::Mat H_chess2camera_64F = Hs_chess2camera[i];
-                    if (H_chess2camera_64F.type() != CV_64F)
-                        H_chess2camera_64F.convertTo(H_chess2camera_64F, CV_64F);
-
-                    cv::Mat H_est_base = H_cam2base_64F * H_chess2camera_64F;
-
-                    cv::Mat t_est = H_est_base(cv::Rect(3,0,1,3)).clone();
-                    cv::Mat t_true = Hs_tcp2base[i](cv::Rect(3,0,1,3)).clone();
-                    if (t_true.type() != CV_64F)
-                        t_true.convertTo(t_true, CV_64F);
-
-                    cv::Mat diff = t_est - t_true;
-                    double error = cv::norm(diff);
-
-                    std::cout << "--- Frame " << i << " ---\n";
-                    std::cout << "Estimated end-effector (from camera): [" << t_est.at<double>(0) << ", "
-                              << t_est.at<double>(1) << ", " << t_est.at<double>(2) << "]\n";
-                    std::cout << "Actual end-effector (from robot):      [" << t_true.at<double>(0) << ", "
-                              << t_true.at<double>(1) << ", " << t_true.at<double>(2) << "]\n";
-                    std::cout << "Position error: " << error << " mm\n";
-                    std::cout << "--------------------------" << std::endl;
+            }
+            else {
+                // Load transformation from CSV
+                std::ifstream file_transform("transform_camera2base.csv");
+                if (!file_transform.is_open()) {
+                    std::cerr << "Error opening file for reading." << std::endl;
+                } else {
+                    std::string line;
+                    int row = 0;
+                    while (std::getline(file_transform, line) && row < H_cam2base.rows) {
+                        std::stringstream ss(line);
+                        std::string value;
+                        int col = 0;
+                        while (std::getline(ss, value, ',') && col < H_cam2base.cols) {
+                            double v = std::stod(value);
+                            H_cam2base.at<double>(row, col) = v;
+                            ++col;
+                        }
+                        ++row;
+                    }
+                    file_transform.close();
                 }
+            }
+
+            // ------ Evaluation of the calibration ------
+            // For each frame, check camera estimate in base frame:
+            // P_base_est = H_cam2base * H_chess2camera
+            // Compare translation against true tcp pose (Hs_tcp2base)
+            for (size_t i = 0; i < num_pose; ++i) {
+                cv::Mat H_cam2base_64F = H_cam2base;
+                cv::Mat H_chess2camera_64F = Hs_chess2camera[i];
+                if (H_chess2camera_64F.type() != CV_64F)
+                    H_chess2camera_64F.convertTo(H_chess2camera_64F, CV_64F);
+
+                cv::Mat H_est_base = H_cam2base_64F * H_chess2camera_64F;
+
+                cv::Mat t_est = H_est_base(cv::Rect(3,0,1,3)).clone();
+                cv::Mat t_true = Hs_tcp2base[i](cv::Rect(3,0,1,3)).clone();
+                if (t_true.type() != CV_64F)
+                    t_true.convertTo(t_true, CV_64F);
+
+                cv::Mat diff = t_est - t_true;
+                double error = cv::norm(diff);
+
+                std::cout << "--- Frame " << i << " ---\n";
+                std::cout << "Estimated end-effector (from camera): [" << t_est.at<double>(0) << ", "
+                            << t_est.at<double>(1) << ", " << t_est.at<double>(2) << "]\n";
+                std::cout << "Actual end-effector (from robot):      [" << t_true.at<double>(0) << ", "
+                            << t_true.at<double>(1) << ", " << t_true.at<double>(2) << "]\n";
+                std::cout << "Position error: " << error << " mm\n";
+                std::cout << "--------------------------" << std::endl;
             }
         }
 

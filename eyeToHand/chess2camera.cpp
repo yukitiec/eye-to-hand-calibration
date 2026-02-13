@@ -119,7 +119,7 @@ void Chess2camera::getCorners(const cv::Mat& frame, std::vector<cv::Point2f>& co
             }
             else {
                 if (counter_reverse == 0)
-                    bool_reverse = 1;
+                    bool_reverse = 0;//1
                 else if (counter_reverse==1)
                     bool_reverse = 0;//2->0
                 counter_reverse += 1;

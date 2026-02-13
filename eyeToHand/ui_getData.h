@@ -36,8 +36,10 @@ public:
 	* @brief move robot for chessboard is within camera field of view, and save images and robot TCP pose.
 	* @param[in] imgDir, csvDir image and csv directory.
 	*/
-	void main(std::vector<cv::Mat>& Hs_chess2camera, std::vector<cv::Mat>& Hs_tcp2base);
+	void main(std::vector<cv::Mat>& Hs_chess2camera, std::vector<cv::Mat>& Hs_tcp2base, const int mode_idx = 1);
 
+	bool capture_calibration_sample(int sample_id, bool is_automatic, std::vector<cv::Mat>& Hs_chess2camera, std::vector<cv::Mat>& Hs_tcp2base);
+	
 	/**
 	* @brief move robot according to human inputs.
 	* @param[out] jointsValues incrementals of each joint
@@ -51,4 +53,19 @@ public:
 
 	cv::Mat createHomogeneousMatrix(std::vector<double>& pose);
 
+	void appendPoseCSV(const std::string& path, const std::vector<double>& joints);
+
+	std::vector<std::vector<double>> loadPosesCSV(const std::string& path);
+
+	//member function tmeplalte - must be defined in the header.
+	// Preferred: take a raw pointer (use urCtrl.get() at call site)
+	void replaySavedPoses(const std::vector<std::vector<double>>& poses,
+		ur_rtde::RTDEControlInterface* urCtrl, std::vector<cv::Mat>& Hs_chess2camera, std::vector<cv::Mat>& Hs_tcp2base);
+
+	// Convenience overload: take the unique_ptr by ref
+	void replaySavedPoses(const std::vector<std::vector<double>>& poses,
+		std::unique_ptr<ur_rtde::RTDEControlInterface>& urCtrl
+		, std::vector<cv::Mat>& Hs_chess2camera, std::vector<cv::Mat>& Hs_tcp2base) {
+		replaySavedPoses(poses, urCtrl.get(), Hs_chess2camera, Hs_tcp2base);
+	}
 };

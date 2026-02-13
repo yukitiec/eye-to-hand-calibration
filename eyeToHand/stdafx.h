@@ -24,6 +24,7 @@
 #include <cmath>
 #include <filesystem>
 #include <iomanip>
+#include <optional>
 
 //Matrix
 #include <eigen3/Eigen/Dense>
@@ -48,7 +49,6 @@
 #include <opencv2/tracking/tracking_legacy.hpp>
 
 //For RealSense.
-#include <sstream>
 #include <iomanip>
 
 #include <librealsense2/rs.hpp> // RealSense SDK

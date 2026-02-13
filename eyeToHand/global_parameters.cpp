@@ -13,7 +13,7 @@ std::queue<std::pair<cv::Mat, rs2::depth_frame>> q_realsense_img;
 extern const std::string file_ur = "ur.csv";
 
 //UR setting
-extern const std::string URIP = "10.0.3.7";//10.0.3.7 for AMIGA, 10.0.4.10 for AMIGO// "169.254.32.90";
+extern const std::string URIP = "10.0.4.10";//10.0.3.7 for AMIGA, 10.0.4.10 for AMIGO// "169.254.32.90";
 std::unique_ptr<RTDEControlInterface> urCtrl = std::make_unique<RTDEControlInterface>(URIP);
 //RTDEControlInterface urCtrl(URIP);
 std::unique_ptr<RTDEIOInterface> urDO = std::make_unique<RTDEIOInterface>(URIP);

@@ -31,4 +31,14 @@ extern std::queue<bool> q_endTracking,q_end_process; //end tracking
 
 //mutex for img
 extern std::mutex mtx_img;
+
+
+struct CsvRow {
+    int automatic = 0;                     // 0: manual, 1: automatic
+    std::array<double, 6> jointMoves{};    // only used if automatic==0
+    int save = 0;                          // only used if automatic==0
+    int n_sample = 0;                      // only used if automatic==1
+    double range = 0.0;                    // only used if automatic==1
+};
+
 #endif
