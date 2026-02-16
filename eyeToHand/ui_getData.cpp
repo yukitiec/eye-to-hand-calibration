@@ -17,6 +17,13 @@ void UI_getData::main(std::vector<cv::Mat>& Hs_chess2camera, std::vector<cv::Mat
         const std::string poseCsv_eval = "saved_joints_eval.csv";
         auto savedPoses = loadPosesCSV(poseCsv_eval);
         if (!savedPoses.empty()) {
+            // Change all savedPoses joint values from degrees to radians by multiplying each by PI/180.
+            constexpr double DEG2RAD = 3.14159265358979323846 / 180.0;
+            for (auto& pose : savedPoses) {
+                for (auto& joint : pose) {
+                    joint *= DEG2RAD;
+                }
+            }
             replaySavedPoses(savedPoses, urCtrl, Hs_chess2camera, Hs_tcp2base);
             // Option 2: pass a raw pointer
             // ui.replaySavedPoses(savedPoses, urCtrl.get(), Hs_chess2camera, Hs_tcp2base);
