@@ -1,4 +1,4 @@
-// ximea_test.cpp : ƒRƒ“ƒ\[ƒ‹ ƒAƒvƒŠƒP[ƒVƒ‡ƒ“‚ÌƒGƒ“ƒgƒŠ ƒ|ƒCƒ“ƒg‚ğ’è‹`‚µ‚Ü‚·B
+// ximea_test.cpp : 
 //
 
 #include "stdafx.h"
@@ -20,85 +20,91 @@ extern std::queue<bool> q_endTracking; //end tracking
 
 
 /**
-* @brief ƒTƒCƒY‚ğl—¶‚µ‚ÄROI‚ğì¬
+* @brief ï¿½Tï¿½Cï¿½Yï¿½ï¿½ï¿½lï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ROIï¿½ï¿½ï¿½ì¬
 *
-* @param[in] center ƒgƒ‰ƒbƒLƒ“ƒO“_‚Ì‘OƒtƒŒ[ƒ€‚ÌˆÊ’uiROI‚Ì’†Sj
-* @param[in] src “ü—Í‰æ‘œ
-* @param[in] roiBase ROI‚Ì˜g
-* @return ROI‰æ‘œ
+* @param[in] center ï¿½gï¿½ï¿½ï¿½bï¿½Lï¿½ï¿½ï¿½Oï¿½_ï¿½Ì‘Oï¿½tï¿½ï¿½ï¿½[ï¿½ï¿½ï¿½ÌˆÊ’uï¿½iROIï¿½Ì’ï¿½ï¿½Sï¿½j
+* @param[in] src ï¿½ï¿½ï¿½Í‰æ‘œ
+* @param[in] roiBase ROIï¿½Ì˜g
+* @return ROIï¿½æ‘œ
 */
 cv::Mat createROI(cv::Point2d& center, const cv::Mat& src, const cv::Rect& roiBase) {
-	return src((roiBase + cv::Point(center)) & cv::Rect(cv::Point(0, 0), src.size()));
+    return src((roiBase + cv::Point(center)) & cv::Rect(cv::Point(0, 0), src.size()));
 }
 
 int main()
 {
-	
-	//constructor
-	Utility ut;
+    
+    //constructor
+    Utility ut;
 
-	std::string file_camera_params = "C:/Users/kawaw/cpp/eyeToHand_calibration/eyeToHand_calibration/camera_calibration/downsample_512";
-	Calibration calibration(file_camera_params);
+    std::string file_camera_params = "C:/Users/kawaw/cpp/eyeToHand_calibration/eyeToHand_calibration/camera_calibration/downsample_512";
+    std::string joint_replay_path = "C:/Users/kawaw/cpp/eyeToHand_calibration/eyeToHand_calibration/joints_replay.csv";
+    /*joints_replay_path content.
+    base,shoulder,elbow,wrist1,wrist2,wrist3
+    0.10,-1.20,1.30,-1.50,-1.57,0.00
+    0.20,-1.10,1.25,-1.45,-1.57,0.10
+    0.30,-1.00,1.20,-1.40,-1.57,0.20
+    */
+    //Calibration Process.
+    Calibration calibration(file_camera_params);
 
 
-	//ƒJƒƒ‰‚Ìƒpƒ‰ƒ[ƒ^İ’è
-	const unsigned int imgWidth = 512; //‰æ‘œ‚Ì•
-	const unsigned int imgHeight = 512;//‰æ‘œ‚Ì‚‚³
-	const unsigned int frameRate = 10; //ƒtƒŒ[ƒ€ƒŒ[ƒg
-	const unsigned int expTime_us = 3000;// 792; //˜IŒõŠÔ
-	const int imgGain = 20;
-	const bool isBinning = true;
-	const int capMode = 0; //0:ƒ‚ƒmƒNƒC1:ƒJƒ‰[
-	const std::string leaderCamID = "30958851";		//ƒŠ[ƒ_[ƒJƒƒ‰
-	const std::string followerCamID = "30957651"; 	//ƒtƒHƒƒƒJƒƒ‰
-	std::atomic<bool> isSaveImage = false;//save img
-	const int InitialFrame = 4800; //initial frame for saving
+    //Basic Settings
+    const unsigned int imgWidth = 512; //Width
+    const unsigned int imgHeight = 512;//Height
+    const unsigned int frameRate = 10; //Camera frame rate
+    const unsigned int expTime_us = 3000;//Exposure time [ms]
+    const int imgGain = 20;
+    const bool isBinning = true;
+    const int capMode = 0; //0:ï¿½ï¿½ï¿½mï¿½Nï¿½ï¿½ï¿½C1:ï¿½Jï¿½ï¿½ï¿½[
+    const std::string leaderCamID = "30957651";		//Leader camera
+    const std::string followerCamID = "30958851"; 	//slave camera
+    std::atomic<bool> isSaveImage = false;//save img
+    const int InitialFrame = 4800; //initial frame for saving
 
-	//std::thread thread_skeleton(&Skeleton::main,skeleton,std::ref(q_startTracking),std::ref(q_endTracking));
-	std::thread thread_cal(&Calibration::main, calibration);
+    std::thread thread_cal(&Calibration::main, calibration,std::cref(joints_replay_path));
 #if SYNC_CAMERAS
-	std::array<Ximea, 2> cams = { Ximea(imgWidth, imgHeight, frameRate, leaderCamID, expTime_us, isBinning, false), Ximea(imgWidth, imgHeight, frameRate, followerCamID, expTime_us, isBinning, true) };
+    std::array<Ximea, 2> cams = { Ximea(imgWidth, imgHeight, frameRate, leaderCamID, expTime_us, isBinning, false), Ximea(imgWidth, imgHeight, frameRate, followerCamID, expTime_us, isBinning, true) };
 #else
-	std::array<Ximea, 2> cams = { Ximea(imgWidth, imgHeight, frameRate, leaderCamID, expTime, isBinning, 0), Ximea(imgWidth, imgHeight, frameRate, followerCamID, expTime, isBinning,0) };
+    std::array<Ximea, 2> cams = { Ximea(imgWidth, imgHeight, frameRate, leaderCamID, expTime, isBinning, 0), Ximea(imgWidth, imgHeight, frameRate, followerCamID, expTime, isBinning,0) };
 #endif //SYNC_CAMERAS
-	//ƒQƒCƒ“İ’è
-	cams[0].SetGain(imgGain);
-	cams[1].SetGain(imgGain);
+    //ï¿½Qï¿½Cï¿½ï¿½ï¿½İ’ï¿½
+    cams[0].SetGain(imgGain);
+    cams[1].SetGain(imgGain);
 
 
-	int saveCount = 0;
-	std::array<cv::Mat1b, 2> srcs = { cv::Mat1b::zeros(imgHeight, imgWidth),cv::Mat1b::zeros(imgHeight, imgWidth) }; //æ“¾‰æ‘œ
+    int saveCount = 0;
+    std::array<cv::Mat1b, 2> srcs = { cv::Mat1b::zeros(imgHeight, imgWidth),cv::Mat1b::zeros(imgHeight, imgWidth) }; //ï¿½æ“¾ï¿½æ‘œ
 
 
-	//ƒƒCƒ“ˆ—
-	for (int fCount = 0;; fCount++) {
-		for (int i_i = 0; i_i < cams.size(); i_i++) {
-			srcs[i_i] = cams[i_i].GetNextImageOcvMat(); //‰æ‘œæ“¾
-		}
+    //Image Capturing
+    for (int fCount = 0;; fCount++) {
+        for (int i_i = 0; i_i < cams.size(); i_i++) {
+            srcs[i_i] = cams[i_i].GetNextImageOcvMat(); //Capture images
+        }
 
-		if (saveCount >= maxSaveImageNum)
-		{
-			std::cout << "finish" << std::endl;
-			break;
-		}
+        if (saveCount >= maxSaveImageNum)
+        {
+            std::cout << "finish" << std::endl;
+            break;
+        }
 
-		ut.pushImg(srcs, fCount);//push images to que
-		if (fCount == 0)
-			q_startTracking.push(true);
+        ut.pushImg(srcs, fCount);//push images to que
+        if (fCount == 0)
+            q_startTracking.push(true);
 
-	}
-	if (!q_startTracking.empty()) q_startTracking.pop();
-	//‰æ‘œo—Í
-	if (!q_endTracking.empty()) q_endTracking.pop();
+    }
+    if (!q_startTracking.empty()) q_startTracking.pop();
+    if (!q_endTracking.empty()) q_endTracking.pop();
 
-	std::cout << "Finish main proc" << std::endl;
-	//display
-	//dispThread.join();
-	//thread_skeleton.join();
-	thread_cal.join();
-	std::cout << "Skeleton Tracking has finished" << std::endl;
-	//sendThread.join();
-	//recvThread.join();
-	return 0;
+    std::cout << "Finish main proc" << std::endl;
+    //display
+    //dispThread.join();
+    //thread_skeleton.join();
+    thread_cal.join();
+    std::cout << "Skeleton Tracking has finished" << std::endl;
+    //sendThread.join();
+    //recvThread.join();
+    return 0;
 }
 

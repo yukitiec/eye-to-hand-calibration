@@ -1,11 +1,11 @@
 #include "calibration.h"
 
-void Calibration::main() {
+void Calibration::main(const std::string& joints_replay_path) {
 	
 	int type_process,width, height, size;
 	std::string bool_mode,bool_continue;
 
-	std::this_thread::sleep_for(std::chrono::milliseconds(7000));
+	std::this_thread::sleep_for(std::chrono::milliseconds(4000));
 
 	while (true) {
 		//continue
@@ -33,7 +33,9 @@ void Calibration::main() {
 				//move robot to initial position
 				std::vector<double> config_init{2.728,-2.716,0.8845,-1.16,-1.20,0.004};
 				urCtrl->moveJ(config_init, 0.5, 0.5);//speed, acceleration
-				ui.main();
+				//Collect data by moving robot randomly.
+				ui.main(joints_replay_path);
+				
 				q_end_process.push(true);
 				//calculate transformation matrix from camera frame to the robot base frame.
 				//construct a chess2camera instance.

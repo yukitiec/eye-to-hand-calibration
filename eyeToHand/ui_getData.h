@@ -28,20 +28,19 @@ public:
 	~UI_getData() {};
 
 	/**
-	* @brief move robot for chessboard is within camera field of view, and save images and robot TCP pose.
-	* @param[in] imgDir, csvDir image and csv directory.
+	* @brief move robot to target joints loaded from csv, and save images and robot TCP pose.
 	*/
-	void main();
+	void main(const std::string& joints_replay_path);
 
 	/**
-	* @brief move robot according to human inputs.
-	* @param[out] jointsValues incrementals of each joint
+	* @brief load target joint poses from csv file.
+	* @param[in] path csv file path
+	* @return list of 6-dof joint targets
 	*/
-	void adjustRobot(std::vector<double>& jointValues);
+	std::vector<std::vector<double>> loadPosesCSV(const std::string& path);
 
 	/**
 	* @brief make a directory.
 	*/
 	void makeDir(std::filesystem::path& dirPath);
-
 };

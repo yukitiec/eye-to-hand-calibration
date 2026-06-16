@@ -56,7 +56,7 @@ public:
 	* 1. get data of images and TCP pose. 2.undistort images and save. 3. corner detection and show display to check whether we'll reverse the points. 4. 
 	* @param[in] imgDir, csvDir image and csv directory.
 	*/
-	void main();
+	void main(const std::string& joints_replay_path="");
 
 	/**
 	* @brief read csv file and load data
