@@ -1,9 +1,10 @@
-camera0: "30958851"
-camera1: "30957651"
+#left : camera0, right : camera 1
+camera0: "30957651" 
+camera1: "30958851"
 frame_width: 512
 frame_height: 512
-mono_calibration_frames: 100
-stereo_calibration_frames: 100
+mono_calibration_frames: 30
+stereo_calibration_frames: 40
 view_resize: 1
 checkerboard_box_size_scale : 45
 checkerboard_rows: 4

@@ -70,6 +70,9 @@
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <PublicIncludeDirectories>C:\ur_rtde\out\install\x64-Release\include</PublicIncludeDirectories>
+  </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
       <WarningLevel>Level3</WarningLevel>
@@ -121,26 +124,45 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
+      <AdditionalIncludeDirectories>C:\ur_rtde\out\install\x64-Release\include;C:\XIMEA\API\xiAPI;C:\XIMEA\Examples\Include</AdditionalIncludeDirectories>
+      <LanguageStandard>stdcpp17</LanguageStandard>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
+      <AdditionalLibraryDirectories>C:\ur_rtde\out\install\x64-Release\lib;C:\XIMEA\Examples\Bin;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="calibration.cpp" />
     <ClCompile Include="chess2camera.cpp" />
+    <ClCompile Include="global_parameters.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="stdafx.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Create</PrecompiledHeader>
     </ClCompile>
     <ClCompile Include="triangulation.cpp" />
+    <ClCompile Include="ui_getData.cpp" />
+    <ClCompile Include="utility.cpp" />
+    <ClCompile Include="xiApiPlusOcv.cpp" />
+    <ClCompile Include="ximea.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="calibration.h" />
     <ClInclude Include="chess2camera.h" />
+    <ClInclude Include="cvui.h" />
+    <ClInclude Include="global_parameters.h" />
+    <ClInclude Include="progressbar.hpp" />
     <ClInclude Include="stdafx.h" />
+    <ClInclude Include="targetver.h" />
     <ClInclude Include="triangulation.h" />
+    <ClInclude Include="type_definition.h" />
+    <ClInclude Include="ui_getData.h" />
+    <ClInclude Include="utility.h" />
+    <ClInclude Include="xiApiPlusOcv.hpp" />
+    <ClInclude Include="ximea.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

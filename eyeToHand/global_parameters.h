@@ -21,6 +21,7 @@ extern std::queue<std::vector<std::vector<std::vector<int>>>> queueJointsPositio
 extern std::queue<bool> queueDanger;
 
 /* constant valude definition */
+extern const double PI;
 extern const std::string filename_left;
 extern const std::string filename_right;
 extern const int LEFT;

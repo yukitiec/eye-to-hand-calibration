@@ -37,8 +37,8 @@ int main()
     //constructor
     Utility ut;
 
-    std::string file_camera_params = "C:/Users/kawaw/cpp/eyeToHand_calibration/eyeToHand_calibration/camera_calibration/downsample_512";
-    std::string joint_replay_path = "C:/Users/kawaw/cpp/eyeToHand_calibration/eyeToHand_calibration/joints_replay.csv";
+    const std::string file_camera_params = "C:/Users/kawaw/cpp/eyeToHand/eyeToHand/camera_calibration";
+    const std::string joint_replay_path = "C:/Users/kawaw/cpp/eyeToHand/eyeToHand/joints_replay.csv";
     /*joints_replay_path content.
     base,shoulder,elbow,wrist1,wrist2,wrist3
     0.10,-1.20,1.30,-1.50,-1.57,0.00
@@ -57,12 +57,12 @@ int main()
     const int imgGain = 20;
     const bool isBinning = true;
     const int capMode = 0; //0:���m�N���C1:�J���[
-    const std::string leaderCamID = "30957651";		//Leader camera
-    const std::string followerCamID = "30958851"; 	//slave camera
+    const std::string leaderCamID = "30957651";		//Left : Leader camera
+    const std::string followerCamID = "30958851"; 	//Right : slave camera
     std::atomic<bool> isSaveImage = false;//save img
     const int InitialFrame = 4800; //initial frame for saving
 
-    std::thread thread_cal(&Calibration::main, calibration,std::cref(joints_replay_path));
+    std::thread thread_cal(&Calibration::main, calibration,joint_replay_path);
 #if SYNC_CAMERAS
     std::array<Ximea, 2> cams = { Ximea(imgWidth, imgHeight, frameRate, leaderCamID, expTime_us, isBinning, false), Ximea(imgWidth, imgHeight, frameRate, followerCamID, expTime_us, isBinning, true) };
 #else

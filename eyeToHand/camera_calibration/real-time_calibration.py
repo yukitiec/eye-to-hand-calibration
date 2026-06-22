@@ -75,7 +75,7 @@ def save_frames_single_camera(camera_name, devnum):
     camera_data_rate = int(interface_data_rate / CAMERAS_ON_SAME_CONTROLLER)
 
     #set data rate
-    cam1.set_limit_bandwidth(camera_data_rate)
+    #cam1.set_limit_bandwidth(camera_data_rate)
 
     #print device serial numbers
     print('Camera 1 serial number: ' + str(cam1.get_device_sn()))
@@ -90,8 +90,8 @@ def save_frames_single_camera(camera_name, devnum):
     # settings
     #downsampling
     if bool_downsample:
-        cam1.set_downsampling('XI_DWN_2x2')
         cam1.set_downsampling_type('XI_SKIPPING')
+        cam1.set_downsampling('XI_DWN_2x2')
         cam1.set_width(512)
         cam1.set_height(512)
         cam1.set_offsetX(64)
@@ -275,7 +275,7 @@ def save_camera_intrinsics(camera_matrix, distortion_coefs, camera_name):
 
 
 #open both cameras and take calibration frames
-def save_frames_two_cams(camera0_name, devnum1, camera1_name, devnum2):
+def save_frames_two_cams(camera0_name, devnum1, camera1_name, devnum2,bool_from_stereo=False):
 
     #create frames directory
     if not os.path.exists('frames_pair'):
@@ -321,8 +321,8 @@ def save_frames_two_cams(camera0_name, devnum1, camera1_name, devnum2):
     print(f"Setting camera bandwidth to {camera_data_rate}")
 
     # Set bandwidth
-    cam1.set_limit_bandwidth(camera_data_rate)
-    cam2.set_limit_bandwidth(camera_data_rate)
+    #cam1.set_limit_bandwidth(camera_data_rate)
+    #cam2.set_limit_bandwidth(camera_data_rate)
 
     #print device serial numbers
     print('Camera 1 serial number: ' + str(cam1.get_device_sn()))
@@ -338,15 +338,17 @@ def save_frames_two_cams(camera0_name, devnum1, camera1_name, devnum2):
     # settings
     #downsampling
     if bool_downsample:
-        cam1.set_downsampling('XI_DWN_2x2')
         cam1.set_downsampling_type('XI_SKIPPING')
+        cam1.set_downsampling('XI_DWN_2x2')
+        
         cam1.set_width(512)
         cam1.set_height(512)
         cam1.set_offsetX(64)
         #cam1.set_offsetY(192)
     else:        
-        cam1.set_downsampling('XI_DWN_1x1')
         cam1.set_downsampling_type('XI_SKIPPING')
+        cam1.set_downsampling('XI_DWN_1x1')
+        
         cam1.set_width(800)
         cam1.set_height(800)
         cam1.set_offsetX(240)
@@ -359,16 +361,18 @@ def save_frames_two_cams(camera0_name, devnum1, camera1_name, devnum2):
 
     #cam2
     if bool_downsample:
-        cam2.set_downsampling('XI_DWN_2x2')
         cam2.set_downsampling_type('XI_SKIPPING')
+        cam2.set_downsampling('XI_DWN_2x2')
+        
         cam2.set_width(512)
         cam2.set_height(512)
         #for downsampling to 512*512
         cam2.set_offsetX(64)
         #cam2.set_offsetY(192)
     else:    
-        cam2.set_downsampling('XI_DWN_1x1')
         cam2.set_downsampling_type('XI_SKIPPING')
+        cam2.set_downsampling('XI_DWN_1x1')
+        
         cam2.set_width(800)
         cam2.set_height(800)
         #for 640*640
@@ -381,9 +385,16 @@ def save_frames_two_cams(camera0_name, devnum1, camera1_name, devnum2):
     cam2.set_imgdataformat('XI_MONO8')
 
 
+
     # create instance of Image to store image data and metadata
     img1 = xiapi.Image()
     img2 = xiapi.Image()
+
+    # start data acquisition
+    if bool_from_stereo:
+        print('Starting data acquisition...')
+        cam1.start_acquisition()
+        cam2.start_acquisition()
 
     # start data acquisition
     print('Starting data acquisition...')
@@ -623,15 +634,17 @@ def check_calibration(camera0_name, devnum1, camera0_data, camera1_name, devnum2
     # settings
     #downsampling
     if bool_downsample:
-        cam1.set_downsampling('XI_DWN_2x2')
         cam1.set_downsampling_type('XI_SKIPPING')
+        cam1.set_downsampling('XI_DWN_2x2')
+        
         cam1.set_width(512)
         cam1.set_height(512)
         cam1.set_offsetX(64)
         #cam1.set_offsetY(192)
     else:      
-        cam1.set_downsampling('XI_DWN_1x1')  
         cam1.set_downsampling_type('XI_SKIPPING')
+        cam1.set_downsampling('XI_DWN_1x1')  
+        
         cam1.set_width(800)
         cam1.set_height(800)
         cam1.set_offsetX(240)
@@ -644,16 +657,18 @@ def check_calibration(camera0_name, devnum1, camera0_data, camera1_name, devnum2
 
     #cam2 :512*512
     if bool_downsample:
-        cam2.set_downsampling('XI_DWN_2x2')
         cam2.set_downsampling_type('XI_SKIPPING')
+        cam2.set_downsampling('XI_DWN_2x2')
+        
         cam2.set_width(512)
         cam2.set_height(512)
         #for downsampling to 512*512
         cam2.set_offsetX(64)
         #cam2.set_offsetY(192)
     else:    
-        cam2.set_downsampling('XI_DWN_1x1')
         cam2.set_downsampling_type('XI_SKIPPING')
+        cam2.set_downsampling('XI_DWN_1x1')
+
         cam2.set_width(800)
         cam2.set_height(800)
         #for 640*640
@@ -955,32 +970,33 @@ if __name__ == '__main__':
     #     print('Call with settings filename: "python3 calibrate.py calibration_settings.yaml"')
     #     quit()
     bool_scratch = False
+    bool_start_from_stereo = True
 
     #Open and parse the settings file
     parse_calibration_settings_file("calibration_settings.yaml")
 
-    """Step1. Save calibration frames for single cameras"""
-    
-    save_frames_single_camera('camera0', 0) #save frames for camera0
-    save_frames_single_camera('camera1', 1) #save frames for camera1
-    print("cali saved")
+    if not bool_start_from_stereo:
+        """Step1. Save calibration frames for single cameras"""
+        save_frames_single_camera('camera0', 0) #save frames for camera0
+        save_frames_single_camera('camera1', 1) #save frames for camera1
+        print("cali saved")
 
-    """Step2. Obtain camera intrinsic matrices and save them"""
-    #camera0 intrinsics
-    images_prefix = os.path.join('frames', 'camera0*')
-    cmtx0, dist0 = calibrate_camera_for_intrinsic_parameters(images_prefix) 
-    save_camera_intrinsics(cmtx0, dist0, 'camera0') #this will write cmtx and dist to disk
-    #camera1 intrinsics
-    images_prefix = os.path.join('frames', 'camera1*')
-    cmtx1, dist1 = calibrate_camera_for_intrinsic_parameters(images_prefix)
-    save_camera_intrinsics(cmtx1, dist1, 'camera1') #this will write cmtx and dist to disk
-
-    #If start from the stereo calibration. -> comment our calibrarte_camera_for_intrinsic_parameters and save_camera_intrinsics
-    #cmtx0, dist0 = load_camera_intrinsics('camera0')
-    #cmtx1, dist1 = load_camera_intrinsics('camera1')
+        """Step2. Obtain camera intrinsic matrices and save them"""
+        #camera0 intrinsics
+        images_prefix = os.path.join('frames', 'camera0*')
+        cmtx0, dist0 = calibrate_camera_for_intrinsic_parameters(images_prefix) 
+        save_camera_intrinsics(cmtx0, dist0, 'camera0') #this will write cmtx and dist to disk
+        #camera1 intrinsics
+        images_prefix = os.path.join('frames', 'camera1*')
+        cmtx1, dist1 = calibrate_camera_for_intrinsic_parameters(images_prefix)
+        save_camera_intrinsics(cmtx1, dist1, 'camera1') #this will write cmtx and dist to disk
+    else: #start from stereo calibration
+        #If start from the stereo calibration. -> comment our calibrarte_camera_for_intrinsic_parameters and save_camera_intrinsics
+        cmtx0, dist0 = load_camera_intrinsics('camera0')
+        cmtx1, dist1 = load_camera_intrinsics('camera1')
 
     """Step3. Save calibration frames for both cameras simultaneously"""
-    save_frames_two_cams('camera0', 0, 'camera1', 1) #save simultaneous frames
+    save_frames_two_cams('camera0', 0, 'camera1', 1,bool_from_stereo=bool_start_from_stereo) #save simultaneous frames
 
 
     """Step4. Use paired calibration pattern frames to obtain camera0 to camera1 rotation and translation"""

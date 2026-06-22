@@ -1,11 +1,11 @@
 #include "calibration.h"
 
-void Calibration::main(const std::string& joints_replay_path) {
+void Calibration::main(std::string joints_replay_path) {
 	
 	int type_process,width, height, size;
 	std::string bool_mode,bool_continue;
 
-	std::this_thread::sleep_for(std::chrono::milliseconds(4000));
+	std::this_thread::sleep_for(std::chrono::seconds(4));
 
 	while (true) {
 		//continue
@@ -31,8 +31,9 @@ void Calibration::main(const std::string& joints_replay_path) {
 			if (bool_mode.compare(sign_continue) == 0) {
 				//collect data for eye to hand calibration.
 				//move robot to initial position
-				std::vector<double> config_init{2.728,-2.716,0.8845,-1.16,-1.20,0.004};
-				urCtrl->moveJ(config_init, 0.5, 0.5);//speed, acceleration
+				std::vector<double> config_init{2.37,-0.736,0.239,-3.44,-0.822,2.11};
+				urCtrl->moveJ(config_init, 0.5, 0.5); //speed, acceleration
+
 				//Collect data by moving robot randomly.
 				ui.main(joints_replay_path);
 				

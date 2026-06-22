@@ -28,7 +28,7 @@ std::vector<std::vector<double>> UI_getData::loadPosesCSV(const std::string& pat
             }
         }
 
-        // If first line is a header, skip it
+        // first row is a header, skip it
         if (firstLine) {
             firstLine = false;
             if (pose.size() != 6) {
@@ -37,7 +37,14 @@ std::vector<std::vector<double>> UI_getData::loadPosesCSV(const std::string& pat
         }
 
         if (pose.size() == 6) {
-            poses.push_back(pose);
+            //convert degree to radian.
+            std::vector<double> pose_rad;
+            for (double j_deg : pose)
+            {
+                double j_rad = j_deg * PI / 180.0;
+                pose_rad.push_back(j_rad);
+            }
+            poses.push_back(pose_rad);
         }
         else {
             std::cerr << "Skipped invalid CSV row: " << line << std::endl;
@@ -48,7 +55,7 @@ std::vector<std::vector<double>> UI_getData::loadPosesCSV(const std::string& pat
     return poses;
 }
 
-void UI_getData::main(const std::string& joints_replay_path) {
+void UI_getData::main(std::string joints_replay_path) {
 
     // make directory for saving data of eye to hand calibration
     path_root = "eyeHand";
@@ -137,7 +144,7 @@ void UI_getData::main(const std::string& joints_replay_path) {
         urCtrl->stopJ();
 
         std::cout << "wait a few seconds ........" << std::endl;
-        cv::waitKey(2000);
+        cv::waitKey(3000);
 
         // show current images
         if (!queueFrame.empty() && !queueFrameIndex.empty()) {

@@ -14,7 +14,6 @@ private:
 	const std::vector<std::string> jointNames = { "base", "shoulder", "elbow", "wrist1", "wrist2", "wrist3" };
 	const std::string sign_save = "s";//save sign.
 	const std::string sign_quit = "q";//continue sign.
-	const double move_max = 0.6;//max joints move.
 	Utility ut;
 
 public:
@@ -30,7 +29,7 @@ public:
 	/**
 	* @brief move robot to target joints loaded from csv, and save images and robot TCP pose.
 	*/
-	void main(const std::string& joints_replay_path);
+	void main(std::string joints_replay_path);
 
 	/**
 	* @brief load target joint poses from csv file.

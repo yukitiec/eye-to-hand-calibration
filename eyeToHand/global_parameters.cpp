@@ -3,6 +3,7 @@
 
 
 /* constant valude definition */
+extern const double PI = 3.141592653589793238;
 extern const std::string filename_left = "humanMotion_0119_left.mp4";
 extern const std::string filename_right = "humanMotion_0119_right.mp4";
 extern const int LEFT = 0;
@@ -43,7 +44,7 @@ extern const std::string file_3d = "triangulation.csv";
 extern const std::string file_ur = "ur.csv";
 
 //UR setting
-extern const std::string URIP = "169.254.52.209";
+extern const std::string URIP = "192.168.58.1";
 std::unique_ptr<RTDEControlInterface> urCtrl = std::make_unique<RTDEControlInterface>(URIP);
 //RTDEControlInterface urCtrl(URIP);
 std::unique_ptr<RTDEIOInterface> urDO = std::make_unique<RTDEIOInterface>(URIP);
